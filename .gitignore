@@ -9,3 +9,6 @@ workspace/
 .DS_Store
 *.dat
 *.nwb
+*.evt
+*.mat
+*.mat
