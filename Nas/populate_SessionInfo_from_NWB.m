@@ -111,32 +111,32 @@ lfp = bz_GetLFP(1);
 
 
 
-%% Create the Ripple events
+%% Create the Ripple and EMG events
 
-    basePath = new_path_for_files;
-    [~, baseName] = fileparts(new_path_for_files);
-    lfpChan = 1;
+        basePath = new_path_for_files;
+        [~, baseName] = fileparts(new_path_for_files);
+        lfpChan = 1;
 
-    % 2.   Ripple detection
+        % 2.   Ripple detection
 
-    % Params (defaults listed below)
-    ripthresh = [2 5]; %min std, max std
-    ripdur = [30 100];
-    ripfreq = [130 200];
+        % Params (defaults listed below)
+        ripthresh = [2 5]; %min std, max std
+        ripdur = [30 100];
+        ripfreq = [130 200];
 
-    % Detect SPW-Rs or load structure with detection info if already detected
-    if isempty(dir(fullfile(basePath, '*ripples.events.mat'))) == 1
-        ripples = bz_FindRipples(basePath, lfpChan,'thresholds',ripthresh,'durations',ripdur,'show','on','saveMat',true);
-    else
-        ripples = bz_LoadEvents(basePath,'CA1Ripples');
-    end
+        % Detect SPW-Rs or load structure with detection info if already detected
+        if isempty(dir(fullfile(basePath, '*ripples.events.mat'))) == 1
+            ripples = bz_FindRipples(basePath, lfpChan,'thresholds',ripthresh,'durations',ripdur,'show','on','saveMat',true);
+        else
+            ripples = bz_LoadEvents(basePath,'CA1Ripples');
+        end
 
-    % Calculate ripple stats
-    [maps,data,stats] = bz_RippleStats(double(lfp.data),lfp.timestamps,ripples);
+        % Calculate ripple stats
+        [maps,data,stats] = bz_RippleStats(double(lfp.data),lfp.timestamps,ripples);
 
-    % Sort by duration vs amplitude of ripple
-    [~,dursort]=sort(data.duration,1,'descend');
-    [~,ampsort]=sort(data.peakAmplitude,1,'descend');
+        % Sort by duration vs amplitude of ripple
+        [~,dursort]=sort(data.duration,1,'descend');
+        [~,ampsort]=sort(data.peakAmplitude,1,'descend');
 
 
 
@@ -220,12 +220,12 @@ lfp = bz_GetLFP(1);
 
 
 
-%% Check that the bz_LoadEvents works
+        %% Check that the bz_LoadEvents works
 
 
-basePath = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\m120_25secs';
+        basePath = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\m120_25secs';
 
-[ events,filename ] = bz_LoadEvents(basePath);
+        [ events,filename ] = bz_LoadEvents(basePath);
 
 
 

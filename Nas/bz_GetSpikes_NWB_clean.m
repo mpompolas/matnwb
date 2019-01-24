@@ -103,29 +103,43 @@ nChannels = sessionInfo.nChannels;
 nwb2 = nwbRead(fullfile(base,[name,'.nwb']));
 
 
-%% Convert the spikes saved in NWB to Buzsaki spikes format:
 
-spikes.UID = 0 % 1x101 double % 1:101
-spikes.times =0 % 1x101 cell
-spikes.shankID = 0% 1x101 double
-spikes.cluID  = 0% 1x101 double
-spikes.rawWaveform = 0% 1x101 cell
-spikes.maxWaveformCh = 0% 1x101 double  %%%%% THIS IS IMPORTANT - TALK TO BEN
-spikes.sessionName = 0% 'm120_25secs'
-spikes.numcells = 0% 101
-spikes.spindices  =0 % 4514x2 double
+%% If spikes file is already created, don't create it again
+if ~exist([basepath filesep sessionInfo.Filename '.spikes.cellinfo.mat']) == 2
+    saveMat = 1; % Create the file
+end
 
 
-
-
-
-
-
-
-
-%% save to buzcode format (before exclusions)
 if saveMat
-    save([basepath filesep sessionInfo.FileName '.spikes.cellinfo.mat'],'spikes')
+
+    %% Convert the spikes saved in NWB to Buzsaki spikes format:
+
+    spikes.UID = 1:length(unique(nwb2.processing.get('cellular').nwbdatainterface.get('clustering').num.load)); % 1x101 double % 1:101
+
+    nums  = nwb2.processing.get('cellular').nwbdatainterface.get('clustering').num.load;
+    times = nwb2.processing.get('cellular').nwbdatainterface.get('clustering').times.load;
+
+    for iNeuron = 1:length(unique(nwb2.processing.get('cellular').nwbdatainterface.get('clustering').num.load))
+        spikes.times{iNeuron} = times(nums == iNeuron-1); % 1x101 cell
+    end
+
+
+    % % % % PROBLEM WITH GETTING THE LABELS OF THE SHANKS
+    % % % spikes.shankID = 0% 1x101 double
+    % % % %
+    % % % 
+    % % % spikes.cluID  = 0% 1x101 double   % This is the index of the template that each neuron is assigned to. Not sure how this is compatible with NWB. These are filled from Kilosort/Klusters.
+    % % % spikes.rawWaveform = 0% 1x101 cell
+    % % % spikes.maxWaveformCh = 0% 1x101 double  %%%%% THIS IS IMPORTANT - TALK TO BEN
+% % %     spikes.region
+    spikes.sessionName = name;
+    spikes.numcells = length(unique(nwb2.processing.get('cellular').nwbdatainterface.get('clustering').num.load)); % 101
+    % % % spikes.spindices  =0 % 4514x2 double
+
+
+    %% save to buzcode format (before exclusions)
+
+    save([basepath filesep sessionInfo.Filename '.spikes.cellinfo.mat'],'spikes')
 end
 
 
