@@ -4,38 +4,67 @@
 
 %% Create a new sessionInfo with what is needed from the nwb file (just what is necessary for the functions to work - not an exhaustive list for now)
 
-nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\m120_25secs.nwb';
+% nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\m120_25secs.nwb';
+nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41.nwb';
 nwb2 = nwbRead(nwb_file);
 
 %% Get the type of the recording (its key will be used to get info from the nwb file)
+% There will be 2 logical values:
+% RawDataPresent
+% LFPDataPresent
 
-all_keys = keys(nwb2.acquisition);
+% A conversion to .lfp files will be prioritized on the raw data if both
+% datatypes are present
 
-for iKey = 1:length(all_keys)
-    if ismember(all_keys{iKey}, {'ECoG','bla bla bla'})   %%%%%%%% ADD MORE HERE, DON'T KNOW WHAT THE STANDARD FORMATS ARE
-        iDataKey = iKey;
+
+[the_path, name,~] = fileparts(nwb_file);
+
+% First check if there are raw data present
+
+try
+    all_raw_keys = keys(nwb2.acquisition);
+
+    for iKey = 1:length(all_raw_keys)
+        if ismember(all_raw_keys{iKey}, {'ECoG','bla bla bla'})   %%%%%%%% ADD MORE HERE, DON'T KNOW WHAT THE STANDARD FORMATS ARE
+            iRawDataKey = iKey;
+            RawDataPresent = 1;
+        else
+            RawDataPresent = 0;
+        end
     end
+    % nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get('all_lfp').data
+catch
+    RawDataPresent = 0;
 end
 
 
 
-[the_path,name_metadata,~] = fileparts(nwb2.acquisition.get(all_keys{iDataKey}).data.filename);
-[~,name,~] = fileparts(nwb_file);
 
-if name_metadata ~= name
-    warning('The filename on the metadata doesnt correspond to the one that was loaded')
+try
+    % Check if the data is in LFP format
+    all_lfp_keys = keys(nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries);
+
+    for iKey = 1:length(all_lfp_keys)
+        if ismember(all_lfp_keys{iKey}, {'all_lfp','bla bla bla'})   %%%%%%%% ADD MORE HERE, DON'T KNOW WHAT THE STANDARD FORMATS ARE
+            iLFPDataKey = iKey;
+            LFPDataPresent = 1;
+            break % Once you find the data don't look for other keys/trouble
+        else
+            LFPDataPresent = 0;
+        end
+    end
+catch
+    LFPDataPresent = 0;
 end
-clear name
 
 
-%%
-%%%%% MAKE A CHECK HERE IF THE NWB IS THE RAW FILE OR THE CONVERTED TO LFP
-% 
-
+if ~RawDataPresent && ~LFPDataPresent
+    error 'There is no data in this .nwb - Maybe check if the Keys are labeled correctly'
+end
 
 
 %% Create an LFP file from the raw nwb recording
-new_path_for_files = [the_path filesep name_metadata];
+new_path_for_files = [the_path filesep name];
 
 if ~exist(new_path_for_files)
     mkdir(new_path_for_files)
@@ -51,13 +80,27 @@ end
 %%
 sessionInfo = struct;
 
-sessionInfo.nChannels      = nwb2.acquisition.get(all_keys{iDataKey}).data.dims(2);
-sessionInfo.samples_NWB    = nwb2.acquisition.get(all_keys{iDataKey}).data.dims(1);
+if RawDataPresent
+    sessionInfo.nChannels      = nwb2.acquisition.get(all_raw_keys{iRawDataKey}).data.dims(2);
+    sessionInfo.samples_NWB    = nwb2.acquisition.get(all_raw_keys{iRawDataKey}).data.dims(1);
+    sessionInfo.rates.wideband = nwb2.acquisition.get(all_raw_keys{iRawDataKey}).starting_time_rate;
+elseif LFPDataPresent
+    sessionInfo.nChannels      = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).data.dims(2);
+    sessionInfo.samples_NWB    = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).data.dims(1);
+    sessionInfo.rates.wideband = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).starting_time_rate;
+    if sessionInfo.rates.wideband <1250
+        warning 'Something weird will happen. Not tested yet'
+    end
+end
+
+
+
+
+
 sessionInfo.nBits          = 16; % ASSUMING THAT NWB GIVES INT16 PRECISION
 sessionInfo.rates.lfp      = 1250;    %1250 -  DEFAULT - CHECK THIS
-sessionInfo.rates.wideband = nwb2.acquisition.get(all_keys{iDataKey}).starting_time_rate;
 sessionInfo.rates.video    = 0;
-sessionInfo.FileName       = name_metadata;% no extension - I DON'T USE THE FILENAME OF THE NWB HERE JUST IN CASE SOMEONE CHANGED IT. 
+sessionInfo.FileName       = name;% no extension - I DON'T USE THE FILENAME OF THE NWB HERE JUST IN CASE SOMEONE CHANGED IT. 
 % sessionInfo.SampleTime     = 50; % 50 no idea
 sessionInfo.nElecGps       = []; % 13
 sessionInfo.ElecGp         = []; % 1x13 cell (struct with 1x12 cell inside)
@@ -81,13 +124,15 @@ sessionInfo.SpkGrps        = []; % I ADDED THIS FOR THE bz_EMGFromLFP
 % sessionInfo.animal         = 'MONKEY'% string
 % sessionInfo.refChan        = 112; % single value
 
+sessionInfo.useRaw           = RawDataPresent; % I add this to choose which data to convert to .lfp files
 
-
-save([new_path_for_files filesep name_metadata '.sessionInfo.mat'], 'sessionInfo')
+save([new_path_for_files filesep name '.sessionInfo.mat'], 'sessionInfo')
 
 
 
 %% Get the .lfp file from the converted NWB
+
+
 
 bz_LFPfromDat_NWB(new_path_for_files)
 % bz_LFPfromDat(new_path_for_files)
@@ -97,21 +142,39 @@ bz_LFPfromDat_NWB(new_path_for_files)
 
 %% Check that the lfp is loading from the bz_GetLFP
 % bz_GetLFP needs to run within the folder that was created
+
+
+            new_path_for_files = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41' ;
+
+
+
 cd (new_path_for_files)
 
 
-% Load channels 1:3
-lfp = bz_GetLFP(1);
+% Load channel 1 % Starts from 0 in bz_GetLFP
+ichannel = 0;
 
+lfp = bz_GetLFP(ichannel);
+figure(1);
+plot(lfp.data)
 
 % % Load channels 1:3
 % lfp_interval = bz_GetLFP(1:3,'intervals',[10,20]);
 
 
+% compare to nwb
+data_nwb_channel = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).data.load([ichannel+1,1],[ichannel+1, Inf]);
 
-
+figure(2); plot(data_nwb_channel)
 
 %% Create the Ripple and EMG events
+
+
+        % lfp must be from only 1 channel for this to work!
+        % Make sure not multiple channels are loaded on the previous
+        % section from bz_GetLFP
+
+
 
         basePath = new_path_for_files;
         [~, baseName] = fileparts(new_path_for_files);
@@ -228,4 +291,31 @@ lfp = bz_GetLFP(1);
         [ events,filename ] = bz_LoadEvents(basePath);
 
 
+        
+        
+        
+        
+        
+  %% Work on the spikes      
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
 

@@ -220,7 +220,7 @@ disp(data(1:10, 1:10));
 % data. For instance, here is how you would load data starting at the index
 % (1,1) and read 10 rows and 20 columns of data
 
-nwb2.acquisition.get('ECoG').data.load([1,1], [10,20])
+nwb2.acquisition.get('ECoG').data.load([10,10], [11,1000])
 
 %%
 % run |doc('types.untyped.DataStub')| for more details on manual partial

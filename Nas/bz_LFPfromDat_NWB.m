@@ -176,123 +176,210 @@ nwb2 = nwbRead(fNWB);
 
 % Check 
 
-all_keys = keys(nwb2.acquisition);
+% First check if there are raw data present
 
-for iKey = 1:length(all_keys)
-    if ismember(all_keys{iKey}, {'ECoG','bla bla bla'})   %%%%%%%% ADD MORE HERE, DON'T KNOW WHAT THE STANDARD FORMATS ARE
-        iDataKey = iKey;
-    end
-end
+try
+    all_raw_keys = keys(nwb2.acquisition);
 
-
-
-
-%% GET LFP FROM DAT!
-fidI = fopen(fdat, 'r');
-fprintf('Extraction of LFP begun \n')
-fidout = fopen(flfp, 'a');
-
-
-for ibatch = 1:nbChunks
-
-    if mod(ibatch,10)==0
-        if ibatch~=10
-            fprintf(repmat('\b',[1 length([num2str(round(100*(ibatch-10)/nbChunks)), ' percent complete'])]))
-        end
-        fprintf('%d percent complete', round(100*ibatch/nbChunks));
-    end
-    
-    h=waitbar(ibatch/(nbChunks+1));
-    
-    if ibatch>1
-%         fseek(fidI,((ibatch-1)*(nbChan*sizeInBytes*chunksize))-(nbChan*sizeInBytes*ntbuff),'bof');
-
-%         dat = fread(fidI,nbChan*(chunksize+2*ntbuff),'int16');
-%         dat = reshape(dat,[nbChan (chunksize+2*ntbuff)]);
-        
-        dat_nwb = nwb2.acquisition.get(all_keys(iDataKey)).data.load([1,((ibatch-1)*chunksize-ntbuff)+1],[nbChan, chunksize+2*ntbuff]) * 10^(6); % I assume the data is in int16/?V - convert to Volts
-        
-    else
-%         dat = fread(fidI,nbChan*(chunksize+ntbuff),'int16');
-%         dat = reshape(dat,[nbChan (chunksize+ntbuff)]);
-        
-        dat_nwb = nwb2.acquisition.get(all_keys(iDataKey)).data.load([1,1],[nbChan, chunksize+ntbuff]) * 10^(6); % I assume the data is in int16/?V - convert to Volts
-    end
-    
-    
-%     DATA = nan(size(dat,1),chunksize/sampleRatio);
-    DATA = nan(size(dat_nwb,1),chunksize/sampleRatio);
-    for ii = 1:size(dat_nwb,1)
-        
-        d = double(dat_nwb(ii,:));
-        if useGPU
-            d = gpuArray(d);
-        end
-        
-        tmp=  iosr.dsp.sincFilter(d,ratio);
-        if useGPU
-            if ibatch==1
-                DATA(ii,:) = gather_try(int16(real( tmp(sampleRatio:sampleRatio:end-ntbuff))));
-            else
-                DATA(ii,:) = gather_try(int16(real( tmp(ntbuff+sampleRatio:sampleRatio:end-ntbuff))));
-            end
-            
+    for iKey = 1:length(all_raw_keys)
+        if ismember(all_raw_keys{iKey}, {'ECoG','bla bla bla'})   %%%%%%%% ADD MORE HERE, DON'T KNOW WHAT THE STANDARD FORMATS ARE
+            iRawDataKey = iKey;
+            RawDataPresent = 1;
         else
-            if ibatch==1
-                DATA(ii,:) = int16(real( tmp(sampleRatio:sampleRatio:end-ntbuff)));
-            else
-                DATA(ii,:) = int16(real( tmp(ntbuff+sampleRatio:sampleRatio:end-ntbuff)));
-            end
-            
+            RawDataPresent = 0;
         end
-        
     end
-    
-    fwrite(fidout,DATA(:),'int16'); 
+    % nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get('all_lfp').data
+catch
+    RawDataPresent = 0;
 end
 
 
-% I assume there is no remainder for now. The way that nwb loads data now
-% doesn't need bounds. If the requested value is out of bounds (more
-% samples than those that are actually there, it still loads up to the
-% end).
-
-% When the way that things load changes, this should be revisited.
 
 
-remainder = nBytes/(sizeInBytes*nbChan) - nbChunks*chunksize;
-if ~isempty(remainder)
-    
-%     fseek(fidI,((ibatch-1)*(nbChan*sizeInBytes*chunksize))-(nbChan*sizeInBytes*ntbuff),'bof');
-%     dat = fread(fidI,nbChan*(remainder+ntbuff),'int16');
-%     dat = reshape(dat,[nbChan (remainder+ntbuff)]);
-    
-    dat_nwb = nwb2.acquisition.get(all_keys(iDataKey)).data.load([1,((ibatch-1)*chunksize-ntbuff)+1],[nbChan, remainder+ntbuff]) * 10^(6); % I assume the data is in int16/?V - convert to Volts
-    
-    DATA = nan(size(dat_nwb,1),floor(remainder/sampleRatio));
-    for ii = 1:size(dat_nwb,1)
-        d = double(dat_nwb(ii,:));
-        if useGPU
-            d = gpuArray(d);
-        end
-        
-        tmp=  iosr.dsp.sincFilter(d,ratio);
-        
-        if useGPU
-            
-            DATA(ii,:) = gather_try(int16(real( tmp(ntbuff+sampleRatio:sampleRatio:end))));
+try
+    % Check if the data is in LFP format
+    all_lfp_keys = keys(nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries);
+
+    for iKey = 1:length(all_lfp_keys)
+        if ismember(all_lfp_keys{iKey}, {'all_lfp','bla bla bla'})   %%%%%%%% ADD MORE HERE, DON'T KNOW WHAT THE STANDARD FORMATS ARE
+            iLFPDataKey = iKey;
+            LFPDataPresent = 1;
+            break % Once you find the data don't look for other keys/trouble
         else
-            DATA(ii,:) = int16(real( tmp(ntbuff+sampleRatio:sampleRatio:end)));
+            LFPDataPresent = 0;
         end
     end
-    
-    fwrite(fidout,DATA(:),'int16');
+catch
+    LFPDataPresent = 0;
 end
 
-close(h);
 
-% fclose(fidI);
-fclose(fidout);
+
+
+
+
+
+
+
+if sessionInfo.useRaw
+
+
+
+    %% GET LFP FROM DAT!
+    fidI = fopen(fdat, 'r');
+    fprintf('Extraction of LFP begun \n')
+    fidout = fopen(flfp, 'a');
+
+
+    for ibatch = 1:nbChunks
+
+        if mod(ibatch,10)==0
+            if ibatch~=10
+                fprintf(repmat('\b',[1 length([num2str(round(100*(ibatch-10)/nbChunks)), ' percent complete'])]))
+            end
+            fprintf('%d percent complete', round(100*ibatch/nbChunks));
+        end
+
+        h=waitbar(ibatch/(nbChunks+1));
+
+
+        if ibatch>1
+    %         fseek(fidI,((ibatch-1)*(nbChan*sizeInBytes*chunksize))-(nbChan*sizeInBytes*ntbuff),'bof');
+
+    %         dat = fread(fidI,nbChan*(chunksize+2*ntbuff),'int16');
+    %         dat = reshape(dat,[nbChan (chunksize+2*ntbuff)]);
+                dat_nwb = nwb2.acquisition.get(all_raw_keys(iRawDataKey)).data.load([1,((ibatch-1)*chunksize-ntbuff)+1],[nbChan, ((ibatch-1)*chunksize-ntbuff)+1 + chunksize+2*ntbuff]) * 10^(6); % I assume the data is in int16/?V - convert to Volts
+        else
+    %         dat = fread(fidI,nbChan*(chunksize+ntbuff),'int16');
+    %         dat = reshape(dat,[nbChan (chunksize+ntbuff)]);
+            dat_nwb = nwb2.acquisition.get(all_raw_keys(iRawDataKey)).data.load([1,1],[nbChan, chunksize+ntbuff]) * 10^(6); % I assume the data is in int16/?V - convert to Volts
+        end
+
+
+    %     DATA = nan(size(dat,1),chunksize/sampleRatio);
+        DATA = nan(size(dat_nwb,1),chunksize/sampleRatio);
+        for ii = 1:size(dat_nwb,1)
+
+            d = double(dat_nwb(ii,:));
+            if useGPU
+                d = gpuArray(d);
+            end
+
+            tmp=  iosr.dsp.sincFilter(d,ratio);
+            if useGPU
+                if ibatch==1
+                    DATA(ii,:) = gather_try(int16(real( tmp(sampleRatio:sampleRatio:end-ntbuff))));
+                else
+                    DATA(ii,:) = gather_try(int16(real( tmp(ntbuff+sampleRatio:sampleRatio:end-ntbuff))));
+                end
+
+            else
+                if ibatch==1
+                    DATA(ii,:) = int16(real( tmp(sampleRatio:sampleRatio:end-ntbuff)));
+                else
+                    DATA(ii,:) = int16(real( tmp(ntbuff+sampleRatio:sampleRatio:end-ntbuff)));
+                end
+
+            end
+
+        end
+
+        fwrite(fidout,DATA(:),'int16'); 
+    end
+
+
+    % I assume there is no remainder for now. The way that nwb loads data now
+    % doesn't need bounds. If the requested value is out of bounds (more
+    % samples than those that are actually there, it still loads up to the
+    % end).
+
+    % When the way that things load changes, this should be revisited.
+
+
+    remainder = nBytes/(sizeInBytes*nbChan) - nbChunks*chunksize;
+    if ~isempty(remainder)
+
+    %     fseek(fidI,((ibatch-1)*(nbChan*sizeInBytes*chunksize))-(nbChan*sizeInBytes*ntbuff),'bof');
+    %     dat = fread(fidI,nbChan*(remainder+ntbuff),'int16');
+    %     dat = reshape(dat,[nbChan (remainder+ntbuff)]);
+        dat_nwb = nwb2.acquisition.get(all_raw_keys(iRawDataKey)).data.load([1,((ibatch-1)*chunksize-ntbuff)+1],[nbChan, ((ibatch-1)*chunksize-ntbuff)+1 + remainder+ntbuff]) * 10^(6); % I assume the data is in int16/?V - convert to Volts
+
+        DATA = nan(size(dat_nwb,1),floor(remainder/sampleRatio));
+        for ii = 1:size(dat_nwb,1)
+            d = double(dat_nwb(ii,:));
+            if useGPU
+                d = gpuArray(d);
+            end
+
+            tmp=  iosr.dsp.sincFilter(d,ratio);
+
+            if useGPU
+
+                DATA(ii,:) = gather_try(int16(real( tmp(ntbuff+sampleRatio:sampleRatio:end))));
+            else
+                DATA(ii,:) = int16(real( tmp(ntbuff+sampleRatio:sampleRatio:end)));
+            end
+        end
+
+        fwrite(fidout,DATA(:),'int16');
+    end
+
+    close(h);
+
+    % fclose(fidI);
+    fclose(fidout);
+    
+    
+    
+else % Convert lfp in nwb to .lfp
+    
+    fidI = fopen(fdat, 'r');
+    fprintf('Extraction of LFP begun \n')
+    fidout = fopen(flfp, 'a');
+
+
+    for ibatch = 1:nbChunks
+
+        if mod(ibatch,10)==0
+            if ibatch~=10
+                fprintf(repmat('\b',[1 length([num2str(round(100*(ibatch-10)/nbChunks)), ' percent complete'])]))
+            end
+            fprintf('%d percent complete', round(100*ibatch/nbChunks));
+        end
+
+        h=waitbar(ibatch/(nbChunks+1));
+    
+        % I inverse the matrix here. I assume that 
+        DATA = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).data.load([1,((ibatch-1)*chunksize)+1],[nbChan, (ibatch*chunksize)]);
+    
+        fwrite(fidout,DATA(:),'int16'); 
+    end
+
+
+    % I assume there is no remainder for now. The way that nwb loads data now
+    % doesn't need bounds. If the requested value is out of bounds (more
+    % samples than those that are actually there, it still loads up to the
+    % end).
+
+    % When the way that things load changes, this should be revisited.
+
+
+    remainder = nBytes/(sizeInBytes*nbChan) - nbChunks*chunksize;
+    if ~isempty(remainder)        
+        DATA = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).data.load([1, ibatch*chunksize+1],[nbChan, Inf])';    
+        fwrite(fidout,DATA(:),'int16');
+    end
+
+    close(h);
+
+    % fclose(fidI);
+    fclose(fidout);
+end
+    
+    
+    
+    
 
 disp(' ........baseName.lfp file created! Huzzah!')
 end
