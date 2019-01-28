@@ -84,12 +84,19 @@ if RawDataPresent
     sessionInfo.nChannels      = nwb2.acquisition.get(all_raw_keys{iRawDataKey}).data.dims(2);
     sessionInfo.samples_NWB    = nwb2.acquisition.get(all_raw_keys{iRawDataKey}).data.dims(1);
     sessionInfo.rates.wideband = nwb2.acquisition.get(all_raw_keys{iRawDataKey}).starting_time_rate;
+    sessionInfo.rates.lfp      = 1250;    %1250 -  DEFAULT - CHECK THIS
+    sessionInfo.lfpSampleRate  = 1250;    %1250 -  DEFAULT - CHECK THIS % tH lfpSampleRate bypasses 
+
 elseif LFPDataPresent
     sessionInfo.nChannels      = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).data.dims(2);
     sessionInfo.samples_NWB    = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).data.dims(1);
     sessionInfo.rates.wideband = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).starting_time_rate;
+    
+    sessionInfo.rates.lfp      = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).starting_time_rate;    %I assign the LFP sampling rate that was already used. Not sure yet if a different value than 1250 Hz will cause problems
+    sessionInfo.lfpSampleRate  = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).starting_time_rate;    %I assign the LFP sampling rate that was already used. Not sure yet if a different value than 1250 Hz will cause problems
+    
     if sessionInfo.rates.wideband <1250
-        warning 'Something weird will happen. Not tested yet'
+        warning 'Something weird will happen. Not thoroughly tested yet'
     end
 end
 
@@ -98,7 +105,6 @@ end
 
 
 sessionInfo.nBits          = 16; % ASSUMING THAT NWB GIVES INT16 PRECISION
-sessionInfo.rates.lfp      = 1250;    %1250 -  DEFAULT - CHECK THIS
 sessionInfo.rates.video    = 0;
 sessionInfo.FileName       = name;% no extension - I DON'T USE THE FILENAME OF THE NWB HERE JUST IN CASE SOMEONE CHANGED IT. 
 % sessionInfo.SampleTime     = 50; % 50 no idea
@@ -109,7 +115,6 @@ sessionInfo.ElecGp         = []; % 1x13 cell (struct with 1x12 cell inside)
 % sessionInfo.VoltageRange   = % 20
 % sessionInfo.Amplification  = % 1000
 % sessionInfo.Offset         = 0;
-sessionInfo.lfpSampleRate  = 1250;    %1250 -  DEFAULT - CHECK THIS
 % sessionInfo.AnatGrps       =
 sessionInfo.spikeGroups.groups        = [];
 sessionInfo.SpkGrps        = []; % I ADDED THIS FOR THE bz_EMGFromLFP
