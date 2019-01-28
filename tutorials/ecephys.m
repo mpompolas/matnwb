@@ -189,9 +189,9 @@ clustering = types.core.Clustering( ...
     'description', 'my_description', ...
     'peak_over_rms', [1, 2, 3], ...
     'times', spike_times, ...
-    'num', cluster_ids);
+    'num', unit_ids);
 
-cell_mod.nwbdatainterface.set('clustering', clustering);
+ecephys_mod.nwbdatainterface.set('clustering', clustering);
 
 %%
 % I am going to call this processing module "ecephys." As a convention, I 
@@ -209,7 +209,7 @@ nwbExport(nwb, 'ecephys_tutorial.nwb')
 %% Reading the file
 % load an NWB file object with
 
-nwb2 = nwbRead('ecephys_tutorial.nwb');
+nwb2 = nwbRead('ecephystutorial.nwb');
 
 %% Reading data
 % Note that |nwbRead| does *not* load all of the dataset contained 
@@ -260,20 +260,20 @@ ylabel(['ECoG (' timeseries.data_unit ')'])
 %% Reading units (RegionViews)
 % The |units| table uses an index array to indicate which spikes belong to which cell.
 % The structure is split up into 3 datasets (see Spikes secion):
-my_spike_times = nwb.units.spike_times;
+my_spike_times = nwb2.units.spike_times;
 %%
 % To get the data for cell 1, first determine the uid that equals 1.
-upper_bound_ind = find(nwb.units.id.data == 1);
+upper_bound_ind = find(nwb2.units.id.data.load == 1);
 
-upper_bound = nwb.units.spike_times_index.data(upper_bound_ind);
+upper_bound = nwb2.units.spike_times_index.data.region(upper_bound_ind);
 if upper_bound_ind == 1
     lower_bound = 1;
 else
-    lower_bound = nwb.units.spike_times_index.data(upper_bound_ind-1);
+    lower_bound = nwb2.units.spike_times_index.data(upper_bound_ind-1).region{1};
 end
 %%
 % Then select the corresponding spike_times_index element
-data = nwb.units.spike_times.data(lower_bound + 1:upper_bound);
+data = nwb2.units.spike_times.data.load(lower_bound + 1:upper_bound.region{1});
 
 
 %% External Links
