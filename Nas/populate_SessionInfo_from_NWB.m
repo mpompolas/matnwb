@@ -301,26 +301,70 @@ figure(2); plot(data_nwb_channel)
         
         
         
-  %% Work on the spikes      
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+%% Work on the spikes      
+
+nNeurons = sum(nwb2.units.id.data.load ~=0); % I ASSUME THAT 0 IS NOISE
+
+spikes = struct;
+spikes.samplingRate = sessionInfo.rates.wideband;
+spikes.UID          = 1:nNeurons;
+
+
+template_Waveform = [21.2963012297339,20.2585005424487,21.2206998551635,21.3478476214865,21.5609060407305,...      % This is from a template I used on Kilosort.  
+                     22.8392565561944,24.6983630854040,28.2241362812803,30.1107342194246,29.1416620544762,...      % I assign the same on every neuron.
+                     25.2447548379813,23.9595314702837,24.8908029479470,24.3822118826549,23.4681225355758,...      % Check if I can get this from nwb
+                     23.8598751128954,21.7980194427923,18.0866792366068,11.9973321575690,-2.96486715514583,...
+                     -44.0439049558331,-110.074832790885,-186.628097395696,-240.085142069235,-255.067959938651,...
+                     -244.823973684355,-220.122942756520,-183.947685024562,-143.562805299476,-104.992358564081,...
+                     -69.3806747152833,-35.0576506603005,-3.29132763624548,22.3478476214865,44.7121087898714,...
+                     59.7499094771566,73.1141706455415,79.3615933259538,82.9595314702837,82.9182943568817,...
+                     82.0591878276721,78.3134833603181,75.0076414359195,70.1691534634109,65.2413184118645,...
+                     59.5643424668473,55.0969885149573,51.9698407486342,45.6296345630672,41.3822118826549,...
+                     37.1519713328267,31.5334146317958];
+
+times       = cell(1,nNeurons);
+rawWaveform = cell(1,nNeurons);
+spindices   = [];
+for iNeuron = 1:nNeurons
+    times{iNeuron}       = nwb2.units.spike_times_index.data.load(5).refresh(nwb2);
+    rawWaveform{iNeuron} = template_Waveform;
+    
+    spindices = [spindices ; times{iNeuron} ones(length(times{iNeuron}),1)*iNeuron];
+end
+
+% Spindices have to be sorted according to when each spike occured
+[~,sortedIndices] = sort(spindices(:,1));
+spindices = spindices(sortedIndices,:);
+
+spikes.times        = times;
+spikes.shankID      = ones(1,nNeurons);     % ADD THE SHANKS HERE. IF NO SHANKS ADD 1s
+spikes.cluID        = ones(1,nNeurons)*2;   % THESE ARE THE SPIKING TEMPLATES. THEY ARE FILLED FROM KILOSORT. I add values of 2 since I think that 0 and 1 are for noise or MUA or something
+spikes.rawWaveform  = rawWaveform;
+spike.maxWaveformCh = ones(1,nNeurons);     % THESE ASSIGN THE MAXIMUM WAVEFORM TO A ACHANNEL. CHECK HOW TO ADD THIS
+spikes.sessionName  = sessionInfo.FileName;
+spikes.numcells     = nNeurons;
+spikes.spindices    = spindices;            % This holds the timing of each spike, sorted, and the neuron it belongs to.
+
+
+
+THE SPIKES ARE SEQUENTIALLY ENTERED ON sum(nwb2.units.spike_times_index.data.load(i))
+based on the neuron they belong to
+
+
+
+nSpikes = 0;
+
+for i = 1:58
+    
+    nSpikes = nSpikes + sum(nwb2.units.spike_times_index.data.load(i));
+end
+
+
+
+
+
+
+
+
+
 
