@@ -310,7 +310,7 @@ xlabel('time (seconds)')
 ylabel(['data (' timeseries.data_unit ')'])
 
 %% Reading indexed column (e.g. spike times)
-data = util.read_indexed_column(nwb.units.spike_times_index, nwb.units.spike_times, 2);
+data = util.read_indexed_column(nwb2.units.spike_times_index, nwb2.units.spike_times, 2);
 
 
 %% External Links

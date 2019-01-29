@@ -303,7 +303,9 @@ figure(2); plot(data_nwb_channel)
         
 %% Work on the spikes      
 
-nNeurons = sum(nwb2.units.id.data.load ~=0); % I ASSUME THAT 0 IS NOISE
+% nNeurons = sum(nwb2.units.id.data.load ~=0); % I ASSUME THAT 0 IS NOISE -
+% CHECK IF THAT IS THE CASE
+nNeurons = length(nwb2.units.id.data.load);
 
 spikes = struct;
 spikes.samplingRate = sessionInfo.rates.wideband;
@@ -325,10 +327,16 @@ template_Waveform = [21.2963012297339,20.2585005424487,21.2206998551635,21.34784
 times       = cell(1,nNeurons);
 rawWaveform = cell(1,nNeurons);
 spindices   = [];
-for iNeuron = 1:nNeurons
-    times{iNeuron}       = nwb2.units.spike_times_index.data.load(5).refresh(nwb2);
-    rawWaveform{iNeuron} = template_Waveform;
+for iNeuron = 1:nNeurons    
     
+    if iNeuron == 1
+        times_temp     = nwb2.units.spike_times.data.load(1:sum(nwb2.units.spike_times_index.data.load(iNeuron)));
+    else
+        times_temp     = nwb2.units.spike_times.data.load(sum(nwb2.units.spike_times_index.data.load(iNeuron-1))+1:sum(nwb2.units.spike_times_index.data.load(iNeuron)));
+    end
+    times{iNeuron} = times_temp(times_temp~=0);
+
+    rawWaveform{iNeuron} = template_Waveform;    
     spindices = [spindices ; times{iNeuron} ones(length(times{iNeuron}),1)*iNeuron];
 end
 
@@ -347,24 +355,11 @@ spikes.spindices    = spindices;            % This holds the timing of each spik
 
 
 
-THE SPIKES ARE SEQUENTIALLY ENTERED ON sum(nwb2.units.spike_times_index.data.load(i))
-based on the neuron they belong to
+
+%% Check that the bz_GetSpikes works
+
+% IT DOESN'T
+IT NEEDS THE clu/res/spk files. Consider using Kilosort for creating them - THESE ARE THE NEUROSUITE INPUTS
 
 
-
-nSpikes = 0;
-
-for i = 1:58
-    
-    nSpikes = nSpikes + sum(nwb2.units.spike_times_index.data.load(i));
-end
-
-
-
-
-
-
-
-
-
-
+spikes_loaded = bz_GetSpikes('UID',[1:20]); %first twenty neurons
