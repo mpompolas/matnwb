@@ -77,7 +77,7 @@ end
 % if ~exist (flfp)
 
 
-%%
+%% Creare SessionInfo
 sessionInfo = struct;
 
 if RawDataPresent
@@ -91,7 +91,6 @@ elseif LFPDataPresent
     sessionInfo.nChannels      = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).data.dims(2);
     sessionInfo.samples_NWB    = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).data.dims(1);
     sessionInfo.rates.wideband = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).starting_time_rate;
-    
     sessionInfo.rates.lfp      = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).starting_time_rate;    %I assign the LFP sampling rate that was already used. Not sure yet if a different value than 1250 Hz will cause problems
     sessionInfo.lfpSampleRate  = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).starting_time_rate;    %I assign the LFP sampling rate that was already used. Not sure yet if a different value than 1250 Hz will cause problems
     
@@ -102,22 +101,73 @@ end
 
 
 
+% Get the ElectrodeGroups
+% There is a lot of redundancy on this one
+
+% electrode_description = nwb2.general_extracellular_ephys_electrodes.vectordata.get('electrode_description').data;
+% filtering = nwb2.general_extracellular_ephys_electrodes.vectordata.get('filtering').data;
+% group = nwb2.general_extracellular_ephys_electrodes.vectordata.get('group').data;
+% group_name = nwb2.general_extracellular_ephys_electrodes.vectordata.get('group_name').data;
+% imp = nwb2.general_extracellular_ephys_electrodes.vectordata.get('imp').data.load;
+location = nwb2.general_extracellular_ephys_electrodes.vectordata.get('location').data;
+shank = nwb2.general_extracellular_ephys_electrodes.vectordata.get('shank').data.load;
+% x = nwb2.general_extracellular_ephys_electrodes.vectordata.get('x').data.load;
+% y = nwb2.general_extracellular_ephys_electrodes.vectordata.get('y').data.load;
+% z = nwb2.general_extracellular_ephys_electrodes.vectordata.get('z').data.load;
 
 
+nGroups = sum(unique(shank)>0); % -1 doesn't belong to a Shank Group
+
+sessionInfo.spikeGroups.nGroups  = nGroups;
+sessionInfo.spikeGroupsnSamples = ones(1,sessionInfo.spikeGroups.nGroups)*32; % The file I found had 32 here
+
+
+
+id = nwb2.general_extracellular_ephys_electrodes.id.data.load;
+
+
+sessionInfo.spikeGroups.groups = cell(1,sessionInfo.spikeGroups.nGroups);
+for iGroup = 1:sessionInfo.spikeGroups.nGroups
+    sessionInfo.spikeGroups.groups{iGroup} = id(shank == iGroup)';
+    
+    % Redundant
+    for iChannel = 1:length(id(shank == iGroup)')
+        sessionInfo.ElecGp{1,iGroup}.channel{1,iChannel} = sessionInfo.spikeGroups.groups{iGroup}(iChannel);
+    end
+    
+    % Redundant
+    sessionInfo.SpkGrps(iGroup).Channels   = id(shank == iGroup)';
+    sessionInfo.SpkGrps(iGroup).nSamples   = 32;
+    sessionInfo.SpkGrps(iGroup).PeakSample = 16; 
+    sessionInfo.SpkGrps(iGroup).nFeatures  = 3; 
+    
+    
+end
+
+
+% Add Region Info
+for iChannel = 1:sessionInfo.nChannels
+    sessionInfo.Region{iChannel} = location{iChannel};
+end
+
+
+
+
+% Get the rest of the Info
 sessionInfo.nBits          = 16; % ASSUMING THAT NWB GIVES INT16 PRECISION
 sessionInfo.rates.video    = 0;
 sessionInfo.FileName       = name;% no extension - I DON'T USE THE FILENAME OF THE NWB HERE JUST IN CASE SOMEONE CHANGED IT. 
 % sessionInfo.SampleTime     = 50; % 50 no idea
-sessionInfo.nElecGps       = []; % 13
-sessionInfo.ElecGp         = []; % 1x13 cell (struct with 1x12 cell inside)
+sessionInfo.nElecGps       = nGroups; % 13
+% sessionInfo.ElecGp         = []; % 1x13 cell (struct with 1x12 cell inside)
 % sessionInfo.HiPassFreq     = ;% probably the one from the LFP conversion
 % sessionInfo.Date           = 
 % sessionInfo.VoltageRange   = % 20
 % sessionInfo.Amplification  = % 1000
 % sessionInfo.Offset         = 0;
 % sessionInfo.AnatGrps       =
-sessionInfo.spikeGroups.groups        = [];
-sessionInfo.SpkGrps        = []; % I ADDED THIS FOR THE bz_EMGFromLFP
+% sessionInfo.spikeGroups.groups        = {1:32};
+% sessionInfo.spikeGroups.nSamples = 1; % I ADDED THIS FOR bz_GetSpikes
 % sessionInfo.channels       =  % 1x128 % starts from 0
 % sessionInfo.lfpChans       =
 % sessionInfo.thetaChans     =
@@ -157,11 +207,12 @@ cd (new_path_for_files)
 
 
 % Load channel 1 % Starts from 0 in bz_GetLFP
-ichannel = 0;
+ichannel = 1;
 
 lfp = bz_GetLFP(ichannel);
 figure(1);
 plot(lfp.data)
+title 'Channel 2 loaded from .lfp file and bzGetLFP'
 
 % % Load channels 1:3
 % lfp_interval = bz_GetLFP(1:3,'intervals',[10,20]);
@@ -171,6 +222,8 @@ plot(lfp.data)
 data_nwb_channel = nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries.get(all_lfp_keys{iLFPDataKey}).data.load([ichannel+1,1],[ichannel+1, Inf]);
 
 figure(2); plot(data_nwb_channel)
+title 'Channel 2 loaded from .nwb'
+
 
 %% Create the Ripple and EMG events
 
@@ -183,7 +236,7 @@ figure(2); plot(data_nwb_channel)
 
         basePath = new_path_for_files;
         [~, baseName] = fileparts(new_path_for_files);
-        lfpChan = 1;
+        lfpChan = 0;
 
         % 2.   Ripple detection
 
@@ -291,7 +344,7 @@ figure(2); plot(data_nwb_channel)
         %% Check that the bz_LoadEvents works
 
 
-        basePath = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\m120_25secs';
+        basePath = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41';
 
         [ events,filename ] = bz_LoadEvents(basePath);
 
@@ -348,18 +401,63 @@ spikes.times        = times;
 spikes.shankID      = ones(1,nNeurons);     % ADD THE SHANKS HERE. IF NO SHANKS ADD 1s
 spikes.cluID        = ones(1,nNeurons)*2;   % THESE ARE THE SPIKING TEMPLATES. THEY ARE FILLED FROM KILOSORT. I add values of 2 since I think that 0 and 1 are for noise or MUA or something
 spikes.rawWaveform  = rawWaveform;
-spike.maxWaveformCh = ones(1,nNeurons);     % THESE ASSIGN THE MAXIMUM WAVEFORM TO A ACHANNEL. CHECK HOW TO ADD THIS
+spikes.maxWaveformCh = ones(1,nNeurons);     % THESE ASSIGN THE MAXIMUM WAVEFORM TO A ACHANNEL. CHECK HOW TO ADD THIS
 spikes.sessionName  = sessionInfo.FileName;
 spikes.numcells     = nNeurons;
 spikes.spindices    = spindices;            % This holds the timing of each spike, sorted, and the neuron it belongs to.
 
+% Assign neuron to region based on the region that its Shank belongs to
+shank_that_neurons_belong_to = nwb2.units.vectordata.get('shank').data.load;
 
+for iNeuron = 1:nNeurons
+    spikes.region{iNeuron} = sessionInfo.Region{sessionInfo.SpkGrps(shank_that_neurons_belong_to(iNeuron)).Channels(1)+1}; % The channels are 0 indexed
+end
+    
+ 
 
 
 %% Check that the bz_GetSpikes works
 
-% IT DOESN'T
-IT NEEDS THE clu/res/spk files. Consider using Kilosort for creating them - THESE ARE THE NEUROSUITE INPUTS
+% spikes_selected = bz_GetSpikes('UID',[1:5]); %first twenty neurons
+% spikes = bz_GetSpikes('spikeGroups',[1:2]); %first twenty neurons               THIS DOESN'T WORK NEEDS REGION FIELD
+% spikes = bz_getSpikes('region','CA1'); cells tagged as recorded in CA1                 THIS DOESN'T WORK
 
 
-spikes_loaded = bz_GetSpikes('UID',[1:20]); %first twenty neurons
+
+%  spikeGroups     -vector subset of shank IDs to load (Default: all)
+%    region          -string region ID to load neurons from specific region
+%                     (requires sessionInfo file or units->structures in xml)
+%    UID             -vector subset of UID's to load 
+%    basepath        -path to recording (where .dat/.clu/etc files are)
+%    getWaveforms    -logical (default=true) to load mean of raw waveform data
+%    forceReload     -logical (default=false) to force loading from
+%                     res/clu/spk files
+%    saveMat         -logical (default=false) to save in buzcode format
+%    noPrompts       -logical (default=false) to supress any user prompts
+%    
+
+
+
+nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41.nwb';
+
+spikes_selected = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'UID',1:8); % Selection of specific neurons
+spikes_selected = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'spikeGroups', [2,4]); % Selection of specific Shanks
+spikes_selected = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'region', 'uknown'); % Selection of specific Region
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
