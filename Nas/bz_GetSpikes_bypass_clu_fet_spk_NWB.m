@@ -76,7 +76,7 @@ load([new_path_for_files filesep name '.sessionInfo.mat'])
     shank_that_neurons_belong_to = nwb2.units.vectordata.get('shank').data.load;
     
     for iNeuron = 1:nNeurons
-        all_region{iNeuron} = sessionInfo.Region{sessionInfo.SpkGrps(shank_that_neurons_belong_to(iNeuron)).Channels(1)+1}; % The channels are 0 indexed
+        all_region{iNeuron} = sessionInfo.region{sessionInfo.SpkGrps(shank_that_neurons_belong_to(iNeuron)).Channels(1)+1}; % The channels are 0 indexed
     end
     
     
@@ -149,10 +149,13 @@ load([new_path_for_files filesep name '.sessionInfo.mat'])
     % Spindices have to be sorted according to when each spike occured
     [~,sortedIndices] = sort(spindices(:,1));
     spindices = spindices(sortedIndices,:);
+    
+    shankID_of_selected_Neurons = nwb2.units.vectordata.get('shank').data.load';
+    shankID_of_selected_Neurons = shankID_of_selected_Neurons(UID);
 
     spikes.times        = times;
-    spikes.shankID      = nwb2.units.vectordata.get('shank').data.load';
-    spikes.cluID        = ones(1,length(UID))*2;   % THESE ARE THE SPIKING TEMPLATES. THEY ARE FILLED FROM KILOSORT. I add values of 2 since I think that 0 and 1 are for noise or MUA or something
+    spikes.shankID      = shankID_of_selected_Neurons;
+    spikes.cluID        = ones(1,length(UID))*(-1);   % THESE ARE THE SPIKING TEMPLATES. THEY ARE FILLED FROM KILOSORT. I ADD A NEGATIVE VALUE TO SEE IF IT CAUSES AN ERROR SOMEWHERE
     spikes.rawWaveform  = rawWaveform;
     spikes.maxWaveformCh = ones(1,length(UID))*(-1);     % THESE ASSIGN THE MAXIMUM WAVEFORM TO A ACHANNEL. CHECK HOW TO ADD THIS. I ADD A NEGATIVE VALUE TO SEE IF IT CAUSES AN ERROR SOMEWHERE
     spikes.sessionName  = sessionInfo.FileName;
@@ -162,7 +165,7 @@ load([new_path_for_files filesep name '.sessionInfo.mat'])
     
 
     for iNeuron = 1:length(UID)
-        spikes.region{iNeuron} = sessionInfo.Region{sessionInfo.SpkGrps(shank_that_neurons_belong_to(UID(iNeuron))).Channels(1)+1}; % The channels are 0 indexed
+        spikes.region{iNeuron} = sessionInfo.region{sessionInfo.SpkGrps(shank_that_neurons_belong_to(UID(iNeuron))).Channels(1)+1}; % The channels are 0 indexed
     end
     
 

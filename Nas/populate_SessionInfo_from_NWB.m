@@ -5,7 +5,7 @@
 %% Create a new sessionInfo with what is needed from the nwb file (just what is necessary for the functions to work - not an exhaustive list for now)
 
 % nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\m120_25secs.nwb';
-nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41.nwb';
+nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41.nwb';
 nwb2 = nwbRead(nwb_file);
 
 %% Get the type of the recording (its key will be used to get info from the nwb file)
@@ -119,8 +119,7 @@ shank = nwb2.general_extracellular_ephys_electrodes.vectordata.get('shank').data
 nGroups = sum(unique(shank)>0); % -1 doesn't belong to a Shank Group
 
 sessionInfo.spikeGroups.nGroups  = nGroups;
-sessionInfo.spikeGroupsnSamples = ones(1,sessionInfo.spikeGroups.nGroups)*32; % The file I found had 32 here
-
+sessionInfo.spikeGroups.nSamples = ones(1,sessionInfo.spikeGroups.nGroups)*32; % The file I found had 32 here
 
 
 id = nwb2.general_extracellular_ephys_electrodes.id.data.load;
@@ -147,7 +146,7 @@ end
 
 % Add Region Info
 for iChannel = 1:sessionInfo.nChannels
-    sessionInfo.Region{iChannel} = location{iChannel};
+    sessionInfo.region{iChannel} = location{iChannel};
 end
 
 
@@ -168,7 +167,7 @@ sessionInfo.nElecGps       = nGroups; % 13
 % sessionInfo.AnatGrps       =
 % sessionInfo.spikeGroups.groups        = {1:32};
 % sessionInfo.spikeGroups.nSamples = 1; % I ADDED THIS FOR bz_GetSpikes
-% sessionInfo.channels       =  % 1x128 % starts from 0
+sessionInfo.channels       =  0:sessionInfo.nChannels-1 ;% 1x128 % starts from 0              THIS IS USED IN THE bz_GetLFP in the end to assign channels to regions
 % sessionInfo.lfpChans       =
 % sessionInfo.thetaChans     =
 % sessionInfo.region         = % cell 1x128
@@ -209,7 +208,48 @@ cd (new_path_for_files)
 % Load channel 1 % Starts from 0 in bz_GetLFP
 ichannel = 1;
 
-lfp = bz_GetLFP(ichannel);
+
+
+
+
+
+
+% % % lfp = bz_GetLFP([0 1]);
+% % % % channel ID 5 (= # 6), from 0 to 120 seconds
+% % % lfp = bz_GetLFP(5,'restrict',[0 120]);
+% % % % same, plus from 240.2 to 265.23 seconds
+% % % lfp = bz_GetLFP(5,'restrict',[0 120;240.2 265.23]);
+% % % % multiple channels
+% % % lfp = bz_GetLFP([1 2 3 4 10 17],'restrict',[0 120;240.2 265.23]);
+% % % % channel # 3 (= ID 2), from 0 to 120 seconds
+% % % lfp = bz_GetLFP(3,'restrict',[0 120],'select','number');
+
+
+
+
+
+
+
+lfp     = bz_GetLFP(    [1 2 3 4 10 17], 'restrict', [0,120 ; 240 265], 'downsample', 5); % Make sure the .lfp is on the same folder as the sessionInfo.mat and there is ONLY ONE .lfp in the folder
+
+lfp_new = bz_GetLFP_NWB([1  2 4 6], 'downsample', 5); % Make sure the .nwb is on the same folder as the sessionInfo.mat and there is ONLY ONE .nwb in the folder
+lfp_new = bz_GetLFP_NWB([1 2 3 4 10 17]); % Make sure the .nwb is on the same folder as the sessionInfo.mat and there is ONLY ONE .nwb in the folder
+
+
+
+lfp     = bz_GetLFP(1);
+
+
+lfp_new = bz_GetLFP_NWB(1);
+
+
+
+
+
+
+
+
+
 figure(1);
 plot(lfp.data)
 title 'Channel 2 loaded from .lfp file and bzGetLFP'
@@ -438,15 +478,45 @@ end
 
 
 
-nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41.nwb';
+nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41.nwb';
 
-spikes_selected = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'UID',1:8); % Selection of specific neurons
-spikes_selected = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'spikeGroups', [2,4]); % Selection of specific Shanks
-spikes_selected = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'region', 'uknown'); % Selection of specific Region
-
-
+spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'UID',[2 4 6]); % Selection of specific neurons
+spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'spikeGroups', [2,4]); % Selection of specific Shanks
+spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'region', 'uknown'); % Selection of specific Region
 
 
+
+
+
+spikes_selected = bz_GetSpikes('UID',[2 4 6]); % Selection of specific neurons
+spikes_selected = bz_GetSpikes('spikeGroups', [2,4]); % Selection of specific neurons
+spikes_selected = bz_GetSpikes('UID',[2 4 6]); % Selection of specific neurons
+
+
+
+
+
+
+%% Work on Behavior
+% A single .mat file needs to be created: File naming format: fbasename.behaviordataName.behavior.mat
+
+
+behaviorName = struct;
+
+
+behaviorName.timestamps = ;
+behaviorName.samplingRate
+
+behaviorName.behaviorinfo
+behaviorName.description
+behaviorName.acquisitionsystem
+behaviorName.processingfunction
+behaviorName.substructnames     = 
+
+for iSubStructName = 1:length(behaviorName.substructnames)
+    behaviorName.(behaviorName.substructnames{iSubStructName}) = 'success'
+
+end
 
 
 
