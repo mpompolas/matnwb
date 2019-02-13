@@ -56,6 +56,7 @@ if isstruct(type)
         end
     end
 else
+    errid = 'MATNWB:INVALIDTYPE';
     errmsg = ['Property `' name '` must be a ' type '.'];
     if isempty(val)
         return;
@@ -86,33 +87,54 @@ else
         end
     elseif strcmp(type, 'isodatetime')
         addpath(fullfile(fileparts(which('nwbfile')), 'external_packages', 'datenum8601'));
-        assert(ischar(val) || iscellstr(val) || isa(val, 'datetime'), errmsg);
-        
+        assert(ischar(val) || iscellstr(val) || isdatetime(val) ||...
+            (iscell(val) && all(cellfun('isclass', val, 'datetime'))), errid, errmsg);
         if ischar(val) || iscellstr(val)
             if ischar(val)
                 val = {val};
             end
             
-            datevals = repmat(datetime('now', 'TimeZone', 'local'), size(val));
+            datevals = cell(size(val));
+            % one of:
+            % +-hh:mm
+            % +-hhmm
+            % +-hh
+            % Z
+            tzre_pattern = '(?:[+-]\d{2}(?::?\d{2})?|Z)$';
             for i = 1:length(val)
                 dnum = datenum8601(val{i});
-                % timezones
-                if length(dnum) > 1 && contains(val{i}, {'+', '-'})
-                    if contains(val{i}, '+')
-                        tz = val{i}(strfind(val{i}, '+'):end);
-                    else
-                        dashidx = strfind(val{i}, '-');
-                        tz = val{i}(dashidx(end):end);
-                    end
-                else
+                
+                tzre_match = regexp(val{i}, tzre_pattern, 'once');
+                if isempty(tzre_match)
                     tz = 'local';
+                else
+                    tz = val{i}(tzre_match:end);
+                    if strcmp(tz, 'Z')
+                        tz = 'UTC';
+                    end
                 end
-                datevals(i) = datetime(dnum(1), 'TimeZone', tz,'ConvertFrom', 'datenum');
+                datevals{i} = ...
+                    datetime(dnum(1), 'TimeZone', tz, 'ConvertFrom', 'datenum');
             end
             val = datevals;
         end
+        
+        if isdatetime(val)
+            val = {val};
+        end
+        
+        for i=1:length(val)
+            if isempty(val{i}.TimeZone)
+                val{i}.TimeZone = 'local';
+            end
+            val{i}.Format = 'yyyy-MM-dd''T''HH:mm:ss.SSSSSSZZZZZ';
+        end
+        
+        if isscalar(val)
+            val = val{1};
+        end
     elseif strcmp(type, 'char')
-        assert(ischar(val) || iscellstr(val), errmsg);
+        assert(ischar(val) || iscellstr(val), errid, errmsg);
     else%class, ref, or link
         
         noncell = false;
@@ -127,7 +149,7 @@ else
             end
             
             if ~isa(subval, type) && ~any(strcmp(class(subval), WHITELIST))
-                error(errmsg);
+                error(errid, errmsg);
             end
         end
         if noncell

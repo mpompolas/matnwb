@@ -2,7 +2,7 @@ import unittest2 as unittest
 from datetime import datetime
 import os.path
 import numpy as np
-from dateutil.tz import tzlocal
+from dateutil.tz import tzlocal, tzoffset
 import numpy.testing as npt
 
 from pynwb import NWBContainer, get_manager, NWBFile, NWBData, TimeSeries
@@ -13,8 +13,10 @@ from pynwb.form.backends.hdf5 import HDF5IO
 
 class PyNWBIOTest(unittest.TestCase):
     def setUp(self):
-        start_time = datetime(1970, 1, 1, 12, 0, 0, tzinfo=tzlocal())
-        create_date = datetime(2017, 4, 15, 12, 0, 0, tzinfo=tzlocal())
+        #tzoffset requires offset in seconds
+        tz = tzoffset(None, -8 * 60 * 60)
+        start_time = datetime(2018, 12, 2, 12, 57, 27, 371444, tzinfo=tz)
+        create_date = datetime(2017, 4, 15, 12, 0, 0, tzinfo=tz)
         self.__file = NWBFile('a test NWB File', 'TEST123', start_time, file_create_date=create_date)
         self.__container = self.addContainer(self.file)
 
@@ -105,7 +107,7 @@ class PyNWBIOTest(unittest.TestCase):
 
 class TimeSeriesIOTest(PyNWBIOTest):
     def addContainer(self, file):
-        ts = TimeSeries('test_timeseries', list(range(100, 200, 10)),
+        ts = TimeSeries('test_timeseries', np.arange(100, 200, 10).astype(np.double),
                         'SIunit', timestamps=np.arange(10, dtype=float), resolution=0.1)
         file.add_acquisition(ts)
         return ts
@@ -131,7 +133,7 @@ class ElectricalSeriesIOTest(PyNWBIOTest):
         for i in range(4):
             file.add_electrode(1.0, 2.0, 3.0, 1.0, 'CA1', 'none', group)
         region = file.create_electrode_table_region([0, 2], 'the first and third electrodes')
-        data = list(zip(range(10), range(10, 20)))
+        data = list(zip(np.arange(10).astype(np.double), np.arange(10, 20).astype(np.double)))
         timestamps = list(range(10))
         es = ElectricalSeries('test_eS', data, region, timestamps=timestamps)
         file.add_acquisition(es)
@@ -156,7 +158,7 @@ class ImagingPlaneIOTest(PyNWBIOTest):
 class PhotonSeriesIOTest(PyNWBIOTest):
     def addContainer(self, file):
         dev1 = file.create_device('dev1', 'dev1 description')
-        oc = OpticalChannel('optchan1', 'unit test TestImagingPlaneIO', 3.14)
+        oc = OpticalChannel('optchan1', 'a fake OpticalChannel', 3.14)
         ip = file.create_imaging_plane('imgpln1', oc, 'a fake ImagingPlane',
                                        dev1, 6.28, 2.718, 'GFP', 'somewhere in the brain')
         data = np.ones((3, 3, 3))
@@ -165,6 +167,7 @@ class PhotonSeriesIOTest(PyNWBIOTest):
         tps = TwoPhotonSeries('test_2ps', ip, data, 'image_unit', 'raw',
                               fov, 1.7, 3.4, timestamps=timestamps, dimension=[200, 200])
         file.add_acquisition(tps)
+        return tps
 
     def getContainer(self, file):
         return file.get_acquisition(self.container.name)
