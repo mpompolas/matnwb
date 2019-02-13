@@ -9,17 +9,12 @@ if any(strcmp(name, names))
 else
     for i=1:length(constrained)
         allowedType = constrained{i};
-        try
-            types.util.checkDtype([pname '.' name], allowedType, val);
+        if isa(val, allowedType)
             return;
-        catch ME
-            if ~strcmp(ME.identifier, 'MATNWB:INVALIDTYPE')
-                rethrow(ME);
-            end
         end
     end
-    error('MATNWB:INVALIDCONSTR',...
-        'Property `%s.%s` should be one of type(s) {%s}.',...
-        pname, name, misc.cellPrettyPrint(constrained));
+    error(['Property `%s.%s` should be one of type(s) {' ...
+        misc.cellPrettyPrint(constrained) '}.']...
+        ,pname, name);
 end
 end
