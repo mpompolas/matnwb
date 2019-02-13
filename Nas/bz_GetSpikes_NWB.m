@@ -1,15 +1,4 @@
 function spikes = bz_GetSpikes_NWB(varargin)
-
-
-
-% This one worked when run in:
-% 'Z:\brainstorm_db\Tutorial_e-Phys_\data\Floyd\@rawm120_25secs\m120_25secs_kilosort_spikes'
-
-
-
-
-
-
 % bz_getSpikes - Get spike timestamps.
 %
 % USAGE
@@ -29,56 +18,27 @@ function spikes = bz_GetSpikes_NWB(varargin)
 %    saveMat         -logical (default=false) to save in buzcode format
 %    noPrompts       -logical (default=false) to supress any user prompts
 %    
-% OUTPUTS
-%
-%    spikes - cellinfo struct with the following fields
-%          .sessionName    -name of recording file
-%          .UID            -unique identifier for each neuron in a recording
-%          .times          -cell array of timestamps (seconds) for each neuron
-%          .spindices      -sorted vector of [spiketime UID], useful for 
-%                           input to some functions and plotting rasters
-%          .region         -region ID for each neuron (especially important large scale, high density probes)
-%          .shankID        -shank ID that each neuron was recorded on
-%          .maxWaveformCh  -channel # with largest amplitude spike for each neuron
-%          .rawWaveform    -average waveform on maxWaveformCh (from raw .dat)
-%          .cluID          -cluster ID, NOT UNIQUE ACROSS SHANKS
-%           
-% NOTES
-%
-% This function can be used in several ways to load spiking data.
-% Specifically, it loads spiketimes for individual neurons and other
-% sessionInfodata that describes each neuron.  Spiketimes can be loaded using the
-% UID(1-N), the shank the neuron was on, or the region it was recorded in.
-% The default behavior is to load all spikes in a recording. The .shankID
-% and .cluID fields can be used to reconstruct the 'units' variable often
-% used in FMAToolbox.
-% units = [spikes.shankID spikes.cluID];
-% 
-% 
-% first usage recommendation:
-% 
-%   spikes = bz_getSpikes('saveMat',true); Loads and saves all spiking data
-%                                          into buzcode format .cellinfo. struct
-% other examples:
-%
-%   spikes = bz_getSpikes('spikeGroups',1:5); first five shanks
-%
-%   spikes = bz_getSpikes('region','CA1'); cells tagged as recorded in CA1
-%
-%   spikes = bz_getSpikes('UID',[1:20]); first twenty neurons
-%
-%
-% written by David Tingley, 2017
+
+% Konstantinos Nasiotis 2019
 
 
 
-% Added support for NWB: Konstantinos Nasiotis 2019
- 
+%% TODO
+disp(' 1. The template waveform should be filled by: nwb2.units.waveform_mean      The example dataset didnt have any. I added a template')
+disp(' 2. The maxWaveformCh should be added on the example dataset')
+disp(' 3. CluID is probably filled by Kilosort - shouldbe added on the example dataset')
+% 4. getWaveforms is not supported. Not sure nwb holds the spiking waveforms - Haven't seen a field
+
+
+
+
+
 %% Deal With Inputs 
 spikeGroupsValidation = @(x) assert(isnumeric(x) || strcmp(x,'all'),...
     'spikeGroups must be numeric or "all"');
 
 p = inputParser;
+addParameter(p,'nwb_file','',@isstr);
 addParameter(p,'spikeGroups','all',spikeGroupsValidation);
 addParameter(p,'region','',@isstr); % won't work without sessionInfodata 
 addParameter(p,'UID',[],@isvector);
@@ -90,345 +50,156 @@ addParameter(p,'noPrompts',false,@islogical);
 
 parse(p,varargin{:})
 
-spikeGroups = p.Results.spikeGroups;
-region = p.Results.region;
-UID = p.Results.UID;
-basepath = p.Results.basepath;
-getWaveforms = p.Results.getWaveforms;
-forceReload = p.Results.forceReload;
-saveMat = p.Results.saveMat;
-noPrompts = p.Results.noPrompts;
+%% Adding support only for spikeGroups, region and UID for now
+
+nwb_file      = p.Results.nwb_file;
+spikeGroups   = p.Results.spikeGroups;
+region        = p.Results.region;
+UID           = p.Results.UID;
+% basepath     = p.Results.basepath;
+% getWaveforms = p.Results.getWaveforms;
+% forceReload  = p.Results.forceReload;
+saveMat       = p.Results.saveMat;
+% noPrompts    = p.Results.noPrompts;
+
+nwb2 = nwbRead(nwb_file);
+[the_path, name,~] = fileparts(nwb_file);
+new_path_for_files = [the_path filesep name];
+load([new_path_for_files filesep name '.sessionInfo.mat'])
 
 
 
+    nNeurons = length(nwb2.units.id.data.load);
 
-
-% Create a temp Session for the Brainstorm data
-name_metadata = 'm120_25secs'
-
-sessionInfo = struct;
-
-sessionInfo.nChannels      = 192;
-sessionInfo.samples_NWB    = 750001;
-sessionInfo.nBits          = 16; % ASSUMING THAT NWB GIVES INT16 PRECISION
-% sessionInfo.rates.lfp      = 1250;    %1250 -  DEFAULT - CHECK THIS
-sessionInfo.rates.wideband = 30000;
-sessionInfo.rates.video    = 0;
-sessionInfo.Filename       = 'm120_25secs';% no extension - I DON'T USE THE FILENAME OF THE NWB HERE JUST IN CASE SOMEONE CHANGED IT. 
-% sessionInfo.SampleTime     = 50; % 50 no idea
-sessionInfo.nElecGps       = []; % 13
-sessionInfo.ElecGp         = []; % 1x13 cell (struct with 1x12 cell inside)
-% sessionInfo.HiPassFreq     = ;% probably the one from the LFP conversion
-% sessionInfo.Date           = 
-% sessionInfo.VoltageRange   = % 20
-% sessionInfo.Amplification  = % 1000
-% sessionInfo.Offset         = 0;
-% sessionInfo.lfpSampleRate  = 
-% sessionInfo.AnatGrps       =
-sessionInfo.spikeGroups.groups        = [];
-% sessionInfo.channels       =  % 1x128 % starts from 0
-% sessionInfo.lfpChans       =
-% sessionInfo.thetaChans     =
-% sessionInfo.region         = % cell 1x128
-% sessionInfo.depth          = 1;   % 3324 - single value
-% sessionInfo.ca1            = 116; % 116 - single value
-% sessionInfo.ca3            = [] % []
-% sessionInfo.ls             = [];
-% sessionInfo.animal         = 'MONKEY'% string
-% sessionInfo.refChan        = 112; % single value
-
-
-
-save([name_metadata '.sessionInfo.mat'], 'sessionInfo')
-
-
-
-
-
-
-
-
-
-
-basepath = 'Z:\brainstorm_db\Tutorial_e-Phys_\data\Floyd\@rawm120_25secs\m120_25secs_kilosort_spikes'
-
-
-[sessionInfo] = bz_getSessionInfo(basepath, 'noPrompts', noPrompts);
-
-
-spikes.samplingRate = sessionInfo.rates.wideband;
-nChannels = sessionInfo.nChannels;
-
-
-%% if the cellinfo file exist and we don't want to re-load files
-if exist([basepath filesep sessionInfo.FileName '.spikes.cellinfo.mat'],'file') && forceReload == false
-    disp('loading spikes from cellinfo file..')
-    load([basepath filesep sessionInfo.FileName '.spikes.cellinfo.mat'])
-    %Check that the spikes structure fits cellinfo requirements
-    [iscellinfo] = bz_isCellInfo(spikes);
-    switch iscellinfo
-        case false
-            warning(['The spikes structure in baseName.spikes.cellinfo.mat ',...
-                'does not fit buzcode standards. Sad.'])
+    
+    
+    % Assign neuron to region based on the region that its Shank belongs to
+    shank_that_neurons_belong_to = nwb2.units.vectordata.get('shank').data.load;
+    
+    for iNeuron = 1:nNeurons
+        all_region{iNeuron} = sessionInfo.region{sessionInfo.SpkGrps(shank_that_neurons_belong_to(iNeuron)).Channels(1)+1}; % The channels are 0 indexed
     end
     
-else % do the below then filter by inputs... (Load from clu/res/fet)
     
-    if ~noPrompts & saveMat == 0 %Inform the user that they should save a file for later
-        savebutton = questdlg(['Would you like to save your spikes in ',...
-            sessionInfo.FileName,'.spikes.cellinfo.mat?  ',...
-            'This will save significant load time later.']);
-        if strcmp(savebutton,'Yes'); saveMat = true; end
-    end
     
-disp('loading spikes from clu/res/spk files..')
-% find res/clu/fet/spk files here
-cluFiles = dir([basepath filesep '*.clu*']);  
-resFiles = dir([basepath filesep '*.res*']);
-if getWaveforms
-    spkFiles = dir([basepath filesep '*.spk*']);
-end
-
-% remove *temp*, *autosave*, and *.clu.str files/directories
-tempFiles = zeros(length(cluFiles),1);
-for i = 1:length(cluFiles) 
-    dummy = strsplit(cluFiles(i).name, '.'); % Check whether the component after the last dot is a number or not. If not, exclude the file/dir. 
-    if ~isempty(findstr('temp',cluFiles(i).name)) | ~isempty(findstr('autosave',cluFiles(i).name)) | isempty(str2num(dummy{length(dummy)})) | find(contains(dummy, 'clu')) ~= length(dummy)-1  
-        tempFiles(i) = 1;
+    %% Make the check here of what will be loaded
+    
+    selected_neurons_UID         = false(1,nNeurons);
+    selected_neurons_spikeGroups = false(1,nNeurons);
+    selected_neurons_region      = false(1,nNeurons);
+    
+    % Check which neurons were selected
+    if ~isempty(UID)
+        selected_neurons_UID(UID) = true;
     end
-end
-cluFiles(tempFiles==1)=[];
-tempFiles = zeros(length(resFiles),1);
-for i = 1:length(resFiles)
-    if ~isempty(findstr('temp',resFiles(i).name)) | ~isempty(findstr('autosave',resFiles(i).name))
-        tempFiles(i) = 1;
-    end
-end
-if getWaveforms
-    resFiles(tempFiles==1)=[];
-    tempFiles = zeros(length(spkFiles),1);
-    for i = 1:length(spkFiles)
-        if ~isempty(findstr('temp',spkFiles(i).name)) | ~isempty(findstr('autosave',spkFiles(i).name))
-            tempFiles(i) = 1;
+    %Check which Shanks were selected
+    if ~isempty(spikeGroups)
+        for iShank = spikeGroups
+            selected_neurons_spikeGroups(find(shank_that_neurons_belong_to==iShank)) = true;
         end
     end
-    spkFiles(tempFiles==1)=[];
-end
-
-if isempty(cluFiles)
-    disp('no clu files found...')
-    spikes = [];
-    return
-end
-
-
-% ensures we load in sequential order (forces compatibility with FMAT
-% ordering)
-for i = 1:length(cluFiles)
-    temp = strsplit(cluFiles(i).name,'.');
-    shanks(i) = str2num(temp{length(temp)});
-end
-[shanks ind] = sort(shanks);
-cluFiles = cluFiles(ind); %Bug here if there are any files x.clu.x that are not your desired clus
-resFiles = resFiles(ind);
-if getWaveforms
-    spkFiles = spkFiles(ind);
-end
-
-% check if there are matching #'s of files
-if length(cluFiles) ~= length(resFiles) & length(cluFiles) ~= length(spkFiles)
-    error('found an incorrect number of res/clu/spk files...')
-end
-
-% use the .clu files to get spike ID's and generate UID and spikeGroup
-% use the .res files to get spike times
-count = 1;
-
-for i=1:length(cluFiles) 
-    disp(['working on ' cluFiles(i).name])
-    
-    temp = strsplit(cluFiles(i).name,'.');
-    shankID = str2num(temp{length(temp)}); %shankID is the spikegroup number
-    clu = load(fullfile(basepath,cluFiles(i).name));
-    clu = clu(2:end); % toss the first sample to match res/spk files
-    res = load(fullfile(basepath,resFiles(i).name));
-    nSamples = sessionInfo.spikeGroups.nSamples(shankID);
-    spkGrpChans = sessionInfo.spikeGroups.groups{shankID}; % we'll eventually want to replace these two lines
-    
-    if getWaveforms && sum(clu)>0 %bug fix if no clusters 
-        % load waveforms
-        chansPerSpikeGrp = length(sessionInfo.spikeGroups.groups{shankID});
-        fid = fopen(fullfile(basepath,spkFiles(i).name),'r');
-        wav = fread(fid,[1 inf],'int16=>int16');
-        try %bug in some spk files... wrong number of samples?
-            wav = reshape(wav,chansPerSpikeGrp,nSamples,[]);
-        catch
-            error(['something is wrong with your .spk file, no waveforms.',...
-                ' Use ''getWaveforms'', false while you get that figured out.'])
-        end
-        wav = permute(wav,[3 1 2]);
+    %Check which regions were selected
+    if ~isempty(region)
+        selected_neurons_region(find(contains(all_region,region))) = true;
     end
     
-    cells  = unique(clu);
-    % remove MUA and NOISE clusters...
-    cells(cells==0) = [];
-    cells(cells==1) = [];  % consider adding MUA as another input argument...?
+    UID = find(selected_neurons_UID | selected_neurons_spikeGroups | selected_neurons_region);
     
-    for c = 1:length(cells)
-       spikes.UID(count) = count; % this only works if all shanks are loaded... how do we optimize this?
-       ind = find(clu == cells(c));
-       spikes.times{count} = res(ind) ./ spikes.samplingRate;
-       spikes.shankID(count) = shankID;
-       spikes.cluID(count) = cells(c);
-
-       %Waveforms    
-       if getWaveforms
-           wvforms = squeeze(mean(wav(ind,:,:)))-mean(mean(mean(wav(ind,:,:)))); % mean subtract to account for slower (theta) trends
-           if prod(size(wvforms))==length(wvforms)%in single-channel groups wvforms will squeeze too much and will have amplitude on D1 rather than D2
-               wvforms = wvforms';%fix here
-           end
-           for t = 1:size(wvforms,1)
-              [a(t) b(t)] = max(abs(wvforms(t,:))); 
-           end
-           [aa bb] = max(a,[],2);
-           spikes.rawWaveform{count} = wvforms(bb,:);
-           spikes.maxWaveformCh(count) = spkGrpChans(bb);  
-           %Regions (needs waveform peak)
-           if isfield(sessionInfo,'region') %if there is regions field in your metadata
-                spikes.region{count} = sessionInfo.region{find(spkGrpChans(bb)==sessionInfo.channels)};
-           elseif isfield(sessionInfo,'Units') %if no regions, but unit region from xml via Loadparamteres
-                %Find the xml Unit that matches group/cluster
-                unitnum = cellfun(@(X,Y) X==spikes.shankID(count) && Y==spikes.cluID(count),...
-                    {sessionInfo.Units(:).spikegroup},{sessionInfo.Units(:).cluster});
-                if sum(unitnum) == 0
-                    display(['xml Missing Unit - spikegroup: ',...
-                        num2str(spikes.shankID(count)),' cluster: ',...
-                        num2str(spikes.cluID(count))])
-                    spikes.region{count} = 'missingxml';
-                else %possible future bug: two xml units with same group/clu...              
-                    spikes.region{count} = sessionInfo.Units(unitnum).structure;
-                end
-           end
-           clear a aa b bb
-       end
-       
-       count = count + 1;
+    if isempty(UID)
+        warning(['Warning: You selected to load cells from region "' region '", but none of your cells are from that region'])
+        spikes = [];
+        return
     end
-end
-
-spikes.sessionName = sessionInfo.FileName;
-
-end
-
-%% save to buzcode format (before exclusions)
-if saveMat
-    save([basepath filesep sessionInfo.FileName '.spikes.cellinfo.mat'],'spikes')
-end
-
-
-%% filter by spikeGroups input
-if ~strcmp(spikeGroups,'all')
-    [toRemove] = ~ismember(spikes.shankID,spikeGroups);
-    spikes.UID(toRemove) = [];
-    for r = 1:length(toRemove)
-        if toRemove(r) == 1
-         spikes.times{r} = [];
-         spikes.region{r} = [];
-        end
-    end
-    spikes.times = removeEmptyCells(spikes.times);
-    spikes.region = removeEmptyCells(spikes.region);
-    spikes.cluID(toRemove) = [];
-    spikes.shankID(toRemove) = [];
+        
     
-    if getWaveforms
-    for r = 1:length(toRemove)
-        if toRemove(r) == 1
-         spikes.rawWaveform{r} = [];
-        end
-    end
-    spikes.rawWaveform = removeEmptyCells(spikes.rawWaveform);
-    spikes.maxWaveformCh(toRemove) = [];
-    end
-end
-%% filter by region input
-if ~isempty(region)
-    if ~isfield(spikes,'region') %if no region information in metadata
-        error(['You selected to load cells from region "',region,...
-            '", but there is no region information in your sessionInfo'])
-    end
     
-  toRemove = ~ismember(spikes.region,region);
-    if sum(toRemove)==length(spikes.UID) %if no cells from selected region
-        warning(['You selected to load cells from region "',region,...
-            '", but none of your cells are from that region'])
-    end
-  
-    spikes.UID(toRemove) = [];
-    for r = 1:length(toRemove)
-        if toRemove(r) == 1
-         spikes.times{r} = [];
-         spikes.region{r} = [];
-        end
-    end
-    spikes.times = removeEmptyCells(spikes.times);
-    spikes.region = removeEmptyCells(spikes.region);
-    spikes.cluID(toRemove) = [];
-    spikes.shankID(toRemove) = [];
+    %% The first time that this function is loaded, make sure to save a .spikes.cellInfo.mat that contains information from all neurons
     
-    if getWaveforms
-    if isfield(spikes,'rawWaveform')
-        for r = 1:length(toRemove)
-            if toRemove(r) == 1
-             spikes.rawWaveform{r} = [];
+    if saveMat
+        UID_forSaveMAt = 1:nNeurons;
+        temp = get_the_spikes_from_selected_UIDs(UID_forSaveMAt, nwb2, sessionInfo, saveMat); clear temp       
+    end
+        
+    spikes = get_the_spikes_from_selected_UIDs(UID, nwb2, sessionInfo, 0);
+    
+    
+    
+    
+    
+    
+    
+    function spikes = get_the_spikes_from_selected_UIDs(UID, nwb2, sessionInfo, saveMat)
+        
+        %% Get Spikes
+        spikes = struct;
+        spikes.samplingRate = sessionInfo.rates.wideband;
+        spikes.UID = UID;
+
+        % The template waveform should be filled by: nwb2.units.waveform_mean
+
+        template_Waveform = [21.2963012297339,21.2206998551635,21.5609060407305,...      % This is from a template I used on Kilosort.  
+                             22.8392565561944,28.2241362812803,30.1107342194246,...      % I assign the same on every neuron.
+                             23.9595314702837,24.3822118826549,23.4681225355758,...      % Check if I can get this from nwb
+                             18.0866792366068,11.9973321575690,-2.96486715514583,...
+                             -110.074832790885,-186.628097395696,-240.085142069235,...
+                             -183.947685024562,-143.562805299476,-104.992358564081,...
+                             -3.29132763624548,22.3478476214865,44.7121087898714,...
+                             73.1141706455415,79.3615933259538,82.9182943568817,...
+                             75.0076414359195,70.1691534634109,65.2413184118645,...
+                             51.9698407486342,45.6296345630672,41.3822118826549,...
+                             37.1519713328267,31.5334146317958];
+
+        times       = cell(1,length(UID));
+        rawWaveform = cell(1,length(UID));
+        spindices   = [];
+
+        entry = 0;
+        for iNeuron = UID
+            entry = entry+1;
+            if iNeuron == 1
+                times_temp = nwb2.units.spike_times.data.load(1:sum(nwb2.units.spike_times_index.data.load(iNeuron)));
+            else
+                times_temp = nwb2.units.spike_times.data.load(sum(nwb2.units.spike_times_index.data.load(iNeuron-1))+1:sum(nwb2.units.spike_times_index.data.load(iNeuron)));
             end
+            times{entry} = times_temp(times_temp~=0);
+
+            rawWaveform{entry} = template_Waveform;     % The template waveform should be filled by: nwb2.units.waveform_mean     The example dataset didn't have any
+            spindices = [spindices ; times{entry} ones(length(times{entry}),1)*iNeuron];
         end
-        spikes.rawWaveform = removeEmptyCells(spikes.rawWaveform);
-        spikes.maxWaveformCh(toRemove) = [];
-    end
-    end
-end
-%% filter by UID input
-if ~isempty(UID)
-        [toRemove] = ~ismember(spikes.UID,UID);
-    spikes.UID(toRemove) = [];
-    for r = 1:length(toRemove)
-        if toRemove(r) == 1
-         spikes.times{r} = [];
-         spikes.region{r} = [];
+
+        % Spindices have to be sorted according to when each spike occured
+        [~,sortedIndices] = sort(spindices(:,1));
+        spindices = spindices(sortedIndices,:);
+
+        shankID_of_selected_Neurons = nwb2.units.vectordata.get('shank').data.load';
+        shankID_of_selected_Neurons = shankID_of_selected_Neurons(UID);
+
+        spikes.times        = times;
+        spikes.shankID      = shankID_of_selected_Neurons;
+        spikes.cluID        = ones(1,length(UID))*(-1);   % THESE ARE THE SPIKING TEMPLATES. THEY ARE FILLED FROM KILOSORT. I ADD A NEGATIVE VALUE TO SEE IF IT CAUSES AN ERROR SOMEWHERE
+        spikes.rawWaveform  = rawWaveform;
+        spikes.maxWaveformCh = ones(1,length(UID))*(-1);     % THESE ASSIGN THE MAXIMUM WAVEFORM TO A ACHANNEL. CHECK HOW TO ADD THIS. I ADD A NEGATIVE VALUE TO SEE IF IT CAUSES AN ERROR SOMEWHERE
+        spikes.sessionName  = sessionInfo.FileName;
+        spikes.numcells     = length(UID);
+        spikes.spindices    = spindices;            % This holds the timing of each spike, sorted, and the neuron it belongs to.
+
+
+
+        for iNeuron = 1:length(UID)
+            spikes.region{iNeuron} = sessionInfo.region{sessionInfo.SpkGrps(shank_that_neurons_belong_to(UID(iNeuron))).Channels(1)+1}; % The channels are 0 indexed
         end
-    end
-    spikes.times = removeEmptyCells(spikes.times);
-    spikes.region = removeEmptyCells(spikes.region);
-    spikes.cluID(toRemove) = [];
-    spikes.shankID(toRemove) = [];
     
-    if getWaveforms
-    for r = 1:length(toRemove)
-        if toRemove(r) == 1
-         spikes.rawWaveform{r} = [];
+        
+        if saveMat
+            save([sessionInfo.FileName filesep sessionInfo.FileName '.spikes.cellinfo.mat'],'spikes')
         end
     end
-    spikes.rawWaveform = removeEmptyCells(spikes.rawWaveform);
-    spikes.maxWaveformCh(toRemove) = [];
-    end
+
 end
 
-%% Generate spindices matrics
-spikes.numcells = length(spikes.UID);
-for cc = 1:spikes.numcells
-    groups{cc}=spikes.UID(cc).*ones(size(spikes.times{cc}));
-end
-if spikes.numcells>0
-    alltimes = cat(1,spikes.times{:}); groups = cat(1,groups{:}); %from cell to array
-    [alltimes,sortidx] = sort(alltimes); groups = groups(sortidx); %sort both
-    spikes.spindices = [alltimes groups];
-end
 
-%% Check if any cells made it through selection
-if isempty(spikes.times) | spikes.numcells == 0
-    spikes = [];
-end
+
+
 
 
 
