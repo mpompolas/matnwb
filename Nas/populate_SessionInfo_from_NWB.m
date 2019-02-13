@@ -122,7 +122,7 @@ sessionInfo.spikeGroups.nGroups  = nGroups;
 sessionInfo.spikeGroups.nSamples = ones(1,sessionInfo.spikeGroups.nGroups)*32; % The file I found had 32 here
 
 
-id = nwb2.general_extracellular_ephys_electrodes.id.data.load;
+id = nwb2.general_extracellular_ephys_electrodes.vectordata.get('amp_channel_id').data.load;
 
 
 sessionInfo.spikeGroups.groups = cell(1,sessionInfo.spikeGroups.nGroups);
@@ -391,77 +391,8 @@ title 'Channel 2 loaded from .nwb'
 
         
         
-        
-        
-        
-%% Work on the spikes      
-
-% nNeurons = sum(nwb2.units.id.data.load ~=0); % I ASSUME THAT 0 IS NOISE -
-% CHECK IF THAT IS THE CASE
-nNeurons = length(nwb2.units.id.data.load);
-
-spikes = struct;
-spikes.samplingRate = sessionInfo.rates.wideband;
-spikes.UID          = 1:nNeurons;
-
-
-template_Waveform = [21.2963012297339,20.2585005424487,21.2206998551635,21.3478476214865,21.5609060407305,...      % This is from a template I used on Kilosort.  
-                     22.8392565561944,24.6983630854040,28.2241362812803,30.1107342194246,29.1416620544762,...      % I assign the same on every neuron.
-                     25.2447548379813,23.9595314702837,24.8908029479470,24.3822118826549,23.4681225355758,...      % Check if I can get this from nwb
-                     23.8598751128954,21.7980194427923,18.0866792366068,11.9973321575690,-2.96486715514583,...
-                     -44.0439049558331,-110.074832790885,-186.628097395696,-240.085142069235,-255.067959938651,...
-                     -244.823973684355,-220.122942756520,-183.947685024562,-143.562805299476,-104.992358564081,...
-                     -69.3806747152833,-35.0576506603005,-3.29132763624548,22.3478476214865,44.7121087898714,...
-                     59.7499094771566,73.1141706455415,79.3615933259538,82.9595314702837,82.9182943568817,...
-                     82.0591878276721,78.3134833603181,75.0076414359195,70.1691534634109,65.2413184118645,...
-                     59.5643424668473,55.0969885149573,51.9698407486342,45.6296345630672,41.3822118826549,...
-                     37.1519713328267,31.5334146317958];
-
-times       = cell(1,nNeurons);
-rawWaveform = cell(1,nNeurons);
-spindices   = [];
-for iNeuron = 1:nNeurons    
-    
-    if iNeuron == 1
-        times_temp     = nwb2.units.spike_times.data.load(1:sum(nwb2.units.spike_times_index.data.load(iNeuron)));
-    else
-        times_temp     = nwb2.units.spike_times.data.load(sum(nwb2.units.spike_times_index.data.load(iNeuron-1))+1:sum(nwb2.units.spike_times_index.data.load(iNeuron)));
-    end
-    times{iNeuron} = times_temp(times_temp~=0);
-
-    rawWaveform{iNeuron} = template_Waveform;    
-    spindices = [spindices ; times{iNeuron} ones(length(times{iNeuron}),1)*iNeuron];
-end
-
-% Spindices have to be sorted according to when each spike occured
-[~,sortedIndices] = sort(spindices(:,1));
-spindices = spindices(sortedIndices,:);
-
-spikes.times        = times;
-spikes.shankID      = ones(1,nNeurons);     % ADD THE SHANKS HERE. IF NO SHANKS ADD 1s
-spikes.cluID        = ones(1,nNeurons)*2;   % THESE ARE THE SPIKING TEMPLATES. THEY ARE FILLED FROM KILOSORT. I add values of 2 since I think that 0 and 1 are for noise or MUA or something
-spikes.rawWaveform  = rawWaveform;
-spikes.maxWaveformCh = ones(1,nNeurons);     % THESE ASSIGN THE MAXIMUM WAVEFORM TO A ACHANNEL. CHECK HOW TO ADD THIS
-spikes.sessionName  = sessionInfo.FileName;
-spikes.numcells     = nNeurons;
-spikes.spindices    = spindices;            % This holds the timing of each spike, sorted, and the neuron it belongs to.
-
-% Assign neuron to region based on the region that its Shank belongs to
-shank_that_neurons_belong_to = nwb2.units.vectordata.get('shank').data.load;
-
-for iNeuron = 1:nNeurons
-    spikes.region{iNeuron} = sessionInfo.Region{sessionInfo.SpkGrps(shank_that_neurons_belong_to(iNeuron)).Channels(1)+1}; % The channels are 0 indexed
-end
-    
- 
-
 
 %% Check that the bz_GetSpikes works
-
-% spikes_selected = bz_GetSpikes('UID',[1:5]); %first twenty neurons
-% spikes = bz_GetSpikes('spikeGroups',[1:2]); %first twenty neurons               THIS DOESN'T WORK NEEDS REGION FIELD
-% spikes = bz_getSpikes('region','CA1'); cells tagged as recorded in CA1                 THIS DOESN'T WORK
-
 
 
 %  spikeGroups     -vector subset of shank IDs to load (Default: all)
@@ -477,46 +408,80 @@ end
 %    
 
 
-
+% NWB functions
 nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41.nwb';
 
 spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'UID',[2 4 6]); % Selection of specific neurons
 spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'spikeGroups', [2,4]); % Selection of specific Shanks
-spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'region', 'uknown'); % Selection of specific Region
+spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'region', 'unknown'); % Selection of specific Region
+
+spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'UID',[2 4 6],'saveMat',true); % Selection of specific neurons
 
 
 
-
-
+% Buzsaki functions
 spikes_selected = bz_GetSpikes('UID',[2 4 6]); % Selection of specific neurons
 spikes_selected = bz_GetSpikes('spikeGroups', [2,4]); % Selection of specific neurons
-spikes_selected = bz_GetSpikes('UID',[2 4 6]); % Selection of specific neurons
+spikes_selected = bz_GetSpikes('region', 'uknown'); % Selection of specific neurons
 
 
 
+%% Work on bz_LoadCellInfo
 
+[ cellinfo_new,filename ] = bz_LoadCellinfo('C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41'); % This creates a prompt to select the cellinfo files that exist in there
+% For now this seems to need to be in the path where the file is in order
+% to work
+
+
+[ cellinfo_new,filename ] = bz_LoadCellinfo('C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41','spikes');
+
+
+[ cellinfo,filename ] = bz_LoadCellinfo('F:\NWBtoBuzcode\YutaMouse41-150903'); % This creates a prompt to select the cellinfo files that exist in there
+[ cellinfo,filename ] = bz_LoadCellinfo('F:\NWBtoBuzcode\YutaMouse41-150903','spikes');
 
 
 %% Work on Behavior
-% A single .mat file needs to be created: File naming format: fbasename.behaviordataName.behavior.mat
+
+nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41.nwb';
 
 
-behaviorName = struct;
+createBehaviorFiles_NWB(nwb_file)
 
 
-behaviorName.timestamps = ;
-behaviorName.samplingRate
+% Test that it works
+[ behavior,filename ] = bz_LoadBehavior( 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41');
 
-behaviorName.behaviorinfo
-behaviorName.description
-behaviorName.acquisitionsystem
-behaviorName.processingfunction
-behaviorName.substructnames     = 
+THE SENSOR DATA DON'T SEEM TO BE VERY WELL ORGANIZED ON THE EXAMPLE DATASET
+SENSOR0 AND SENSOR1 ARE 2-DIMENSIONAL
 
-for iSubStructName = 1:length(behaviorName.substructnames)
-    behaviorName.(behaviorName.substructnames{iSubStructName}) = 'success'
+CHECK IF X AND Y ARE NEEDED ON THE BEHAVIOR MAT FILES
 
-end
+
+
+behavior = bz_LoadBehavior_NWB(nwb2);
+
+
+
+%% Create events file
+
+
+nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41.nwb';
+nwb2 = nwbRead(nwb_file);
+
+createEventsFiles_NWB(nwb_file)
+
+
+
+
+
+[events, filename] = bz_LoadEvents('C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41');
+
+
+
+
+events = bz_LoadEvents_NWB(nwb2);
+events = bz_LoadEvents_NWB(nwb2,'PulseStim_5V_77777ms_LD12');
+
 
 
 
