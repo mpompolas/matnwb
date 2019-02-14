@@ -90,16 +90,21 @@ function bodystr = fillBody(pname, defaults, names, props, namespace)
 if isempty(defaults)
     bodystr = '';
 else
-    usmap = containers.Map;
+    overridemap = containers.Map;
     for i=1:length(defaults)
         nm = defaults{i};
         if strcmp(props(nm).dtype, 'char')
-            usmap(nm) = ['''' props(nm).value ''''];
+            overridemap(nm) = ['''' props(nm).value ''''];
         else
-            usmap(nm) = [props(nm).dtype '(' props(nm).value ')'];
+            overridemap(nm) =...
+                sprintf('types.util.correctType(%s, ''%s'')',...
+                    props(nm).value,...
+                    props(nm).dtype);
         end
     end
-    kwargs = io.map2kwargs(usmap);
+    kwargs = io.map2kwargs(overridemap);
+    %add surrounding quotes to kwargs so misc.cellPrettyPrint can print them correctly
+    kwargs(1:2:end) = strcat('''', kwargs(1:2:end), '''');
     bodystr = ['varargin = [{' misc.cellPrettyPrint(kwargs) '} varargin];' newline];
 end
 bodystr = [bodystr 'obj = obj@' pname '(varargin{:});'];
@@ -107,8 +112,8 @@ bodystr = [bodystr 'obj = obj@' pname '(varargin{:});'];
 if isempty(names)
     return;
 end
-
-constrained = false(size(names));
+% if there's a root object that is a constrained set, let it be hoistable from dynamic arguments
+dynamicConstrained = false(size(names));
 anon = false(size(names));
 isattr = false(size(names));
 typenames = repmat({''}, size(names));
@@ -118,12 +123,12 @@ for i=1:length(names)
     prop = props(nm);
     
     if isa(prop, 'file.Group') || isa(prop, 'file.Dataset')
-        constrained(i) = prop.isConstrainedSet;
+        dynamicConstrained(i) = prop.isConstrainedSet && strcmpi(nm, prop.type);
         anon(i) = ~prop.isConstrainedSet && isempty(prop.name);
         
         if ~isempty(prop.type)
             pc_namespace = namespace.getNamespace(prop.type);
-            varnames{i} = prop.type;
+            varnames{i} = nm;
             if ~isempty(pc_namespace)
                 typenames{i} = ['types.' pc_namespace.name '.' prop.type];
             end
@@ -139,7 +144,7 @@ warnmsg = ['`' pname '`''s constructor is unable to check for type `%1$s` ' ...
     'the namespace or class definition for type `%1$s` or fix its schema.'];
 
 invalid = cellfun('isempty', typenames);
-invalidWarn = invalid & (constrained | anon) & ~isattr;
+invalidWarn = invalid & (dynamicConstrained | anon) & ~isattr;
 invalidVars = varnames(invalidWarn);
 for i=1:length(invalidVars)
     warning(warnmsg, invalidVars{i});
@@ -150,10 +155,10 @@ varnames = lower(varnames);
 deleteFromVars = 'varargin(ivarargin) = [];';
 %if constrained/anon sets exist, then check for nonstandard parameters and add as
 %container.map
-constrainedTypes = typenames(constrained & ~invalid);
-constrainedVars = varnames(constrained & ~invalid);
+constrainedTypes = typenames(dynamicConstrained & ~invalid);
+constrainedVars = varnames(dynamicConstrained & ~invalid);
 methodCalls = strcat('[obj.', constrainedVars, ', ivarargin] = ',...
-    ' types.util.parseConstrained(obj,''', pname, ''', ''',...
+    ' types.util.parseConstrained(obj,''', constrainedVars, ''', ''',...
     constrainedTypes, ''', varargin{:});');
 fullBody = cell(length(methodCalls) * 2,1);
 fullBody(1:2:end) = methodCalls;
@@ -180,11 +185,13 @@ parser = {...
     'p.PartialMatching = false;',...
     'p.StructExpand = false;'};
 
-names = names(~constrained & ~anon);
+names = names(~dynamicConstrained & ~anon);
 defaults = cell(size(names));
 for i=1:length(names)
     prop = props(names{i});
-    if isa(prop, 'file.Group') && (prop.hasAnonData || prop.hasAnonGroups)
+    if (isa(prop, 'file.Group') &&...
+            (prop.hasAnonData || prop.hasAnonGroups || prop.isConstrainedSet)) ||...
+       (isa(prop, 'file.Dataset') && prop.isConstrainedSet)
         defaults{i} = 'types.untyped.Set()';
     else
         defaults{i} = '[]';

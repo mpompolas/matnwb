@@ -3,15 +3,15 @@
 % 
 %  author: Ben Dichter
 %  contact: ben.dichter@gmail.com
-%  last edited: Oct 9, 2018
+%  last edited: Jan 29, 2019
 
 %% NWB file
 % All contents get added to the NWB file, which is created with the
 % following command
 
 date = datetime(2018, 3, 1, 12, 0, 0);
-session_start_time = datetime(date,'Format','yyyy-MM-dd''T''HH:mm:SSZZ',...
-    'TimeZone','local');
+session_start_time = datetime(date, 'Format', 'yyyy-MM-dd''T''HH:mm:ssZZ', ...
+    'TimeZone', 'local');
 nwb = nwbfile( 'source', 'acquired on rig2', ...
     'session_description', 'a test NWB File', ...
     'identifier', 'mouse004_day4', ...
@@ -31,88 +31,95 @@ disp(nwb);
 % 
 % <<ecephys_data_deps.png>>
 % 
-
 %% Electrode Table
 % Electrode tables hold the position and group information about each 
 % electrode and the brain region and filtering. Groups organize electrodes 
 % within a single device. Devices can have 1 or more groups. In this example, 
 % we have 2 devices that each only have a single group.
 
-device_labels = {'a','a','a','a','a','b','b','b','b','b'};
+device_labels = {'a', 'a', 'a', 'a', 'a', 'b', 'b', 'b', 'b', 'b'};
 
 udevice_labels = unique(device_labels, 'stable');
 
-variables = {'id', 'x', 'y', 'z', 'imp', 'location', 'filtering', ...
-    'group', 'group_name'};
+variables = {'x', 'y', 'z', 'imp', 'location', 'filtering', 'group', ...
+    'label'};
 for i_device = 1:length(udevice_labels)
     device_label = udevice_labels{i_device};
     
-    nwb.general_devices.set(device_label,...
+    nwb.general_devices.set(device_label, ...
         types.core.Device());
     
-    nwb.general_extracellular_ephys.set(device_label,...
-        types.core.ElectrodeGroup(...
+    nwb.general_extracellular_ephys.set(device_label, ...
+        types.core.ElectrodeGroup( ...
         'description', 'a test ElectrodeGroup', ...
         'location', 'unknown', ...
         'device', types.untyped.SoftLink(['/general/devices/' device_label])));
     
-    ov = types.untyped.ObjectView(['/general/extracellular_ephys/' device_label]);
+    device_object_view = types.untyped.ObjectView( ...
+        ['/general/extracellular_ephys/' device_label]);
     
     elec_nums = find(strcmp(device_labels, device_label));
     for i_elec = 1:length(elec_nums)
         elec_num = elec_nums(i_elec);
         if i_device == 1 && i_elec == 1
-            tbl = table(int64(1), NaN, NaN, NaN, NaN, {'CA1'}, {'filtering'}...
-                , ov, {'electrode_group'},'VariableNames', variables);
+            tbl = table(NaN, NaN, NaN, NaN, {'CA1'}, {'filtering'}, ...
+                device_object_view, {'electrode_label'}, ...
+                'VariableNames', variables);
         else
-            tbl = [tbl; {int64(elec_num), NaN, NaN, NaN, NaN,...
-                'CA1', 'filtering', ov, 'electrode_group'}];
+            tbl = [tbl; {NaN, NaN, NaN, NaN, 'CA1', 'filtering', ...
+                device_object_view, 'electrode_label'}];
         end
     end        
 end
 %%
-% add the |DynamicTable| object to the NWB file using the name |'electrodes'| (not flexible)
+% add the |DynamicTable| object to the NWB file in
+% /general/extracellular_ephys/electrodes
 
-tbl.Properties.Description = 'my description';
+electrode_table = util.table2nwb(tbl, 'all electrodes');
+nwb.general_extracellular_ephys_electrodes = electrode_table;
 
-electrode_table = util.table2nwb(tbl);
-nwb.general_extracellular_ephys.set('electrodes', electrode_table);
+%% Multielectrode recording
+% In order to write a multielectrode recording, you need to construct a 
+% region view of the electrode table to link the signal to the electrodes 
+% that generated them. You must do this even if the signal is from all of 
+% the electrodes. Here we will create a reference that includes all 
+% electrodes. Then we will generate a signal 1000 timepoints long from 10 
+% channels.
 
-%% LFP
-% In order to write LFP, you need to construct a region view of the electrode 
-% table to link the signal to the electrodes that generated them. You must do
-% this even if the signal is from all of the electrodes. Here we will create
-% a reference that includes all electrodes. Then we will randomly generate a
-% signal 1000 timepoints long from 10 channels
+electrodes_object_view = types.untyped.ObjectView( ...
+    '/general/extracellular_ephys/electrodes');
 
-ov = types.untyped.ObjectView('/general/extracellular_ephys/electrodes');
-
-electrode_table_region = types.core.DynamicTableRegion('table', ov, ...
-    'description', 'all electrodes',...
-    'data', [1 height(tbl)]');
+electrode_table_region = types.core.DynamicTableRegion( ...
+    'table', electrodes_object_view, ...
+    'description', 'all electrodes', ...
+    'data', [0 height(tbl)-1]');
 
 %%
 % once you have the |ElectrodeTableRegion| object, you can create an
-% ElectricalSeries object to hold your LFP data. Here is an example using
-% starting_time and rate.
+% |ElectricalSeries| object to hold your multielectrode data. An 
+% |ElectricalSeries| is an example of a |TimeSeries| object. For all 
+% |TimeSeries| objects, you have 2 options for storing time information.
+% The first is to use |starting_time| and |rate|:
 
-electrical_series = types.core.ElectricalSeries(...
+% generate data for demonstration
+data = reshape(1:10000, 10, 1000);
+
+electrical_series = types.core.ElectricalSeries( ...
     'starting_time', 0.0, ... % seconds
     'starting_time_rate', 200., ... % Hz
-    'data', randn(10, 1000),...
-    'electrodes', electrode_table_region,...
-    'data_unit','V');
+    'data', data, ...
+    'electrodes', electrode_table_region, ...
+    'data_unit', 'V');
 
-nwb.acquisition.set('ECoG', electrical_series);
+nwb.acquisition.set('multielectrode_recording', electrical_series);
 %%
-% You can also specify time using timestamps. This is particularly useful if
-% the timestamps are not evenly sampled. In this case, the electrical series
+% You can also specify time using |timestamps|. This is particularly useful if
+% the sample times are not evenly sampled. In this case, the electrical series
 % constructor will look like this
 
 electrical_series = types.core.ElectricalSeries(...
     'timestamps', (1:1000)/200, ...
-    'starting_time_rate', 200., ... % Hz
-    'data', randn(10, 1000),...
+    'data', data,...
     'electrodes', electrode_table_region,...
     'data_unit','V');
 
@@ -122,70 +129,137 @@ electrical_series = types.core.ElectricalSeries(...
 trials = types.core.TimeIntervals( ...
     'colnames', {'correct','start_time','stop_time'},...
     'description', 'trial data and properties', ...
-    'id', types.core.ElementIdentifiers('data', 1:3),...
+    'id', types.core.ElementIdentifiers('data', 0:2),...
     'start_time', types.core.VectorData('data', [.1, 1.5, 2.5],...
-        'description','hi'),...
+        'description','start time of trial'),...
     'stop_time', types.core.VectorData('data', [1., 2., 3.],...
-        'description','hi'),...
-    'correct', types.core.VectorData('data', [false,true,false],...
+        'description','end of each trial'),...
+    'correct', types.core.VectorData('data', [false, true, false],...
         'description','my description'));
 
-nwb.intervals.set('trials', trials);
+nwb.intervals_trials = trials;
 
 %%
 % |colnames| is flexible - it can store any column names and the entries can
 % be any data type, which allows you to store any information you need about 
-% trials. The units table stores information about cells and is created with
-% an analogous workflow.
+% trials.
+%
+%% DynamicTables
+% NWB makes use of the |DynamicTable| neurodata_type to deal with data 
+% organized in a table. These tables are powerful in that they can contain
+% user-defined columns, can hold columns where each row is itself an array,
+% and can reference other tables. We have already seen one example of 
+% a |DynamicTable| with the |electrodes| table. We will contruct a similar
+% table for the |units| table, but this time we will show off the 
+% flexibility and customization of |DynamicTable|s. When adding a column to
+% a |DynamicTable|, you need to ask yourself 3 questions:
+% 1) Is this a default name value or a user-defined value
+% 2) Is each element of this column itself an array (e.g. spike times)
+% 3) Is this column referencing another column (e.g. electrodes)?
+%
+% Standard columns should be |VectorData| objects.
+%
+% 1) If the column is a default optional column, it can be added to the
+% table by assigning the |VectorData| to a table attribute of the same name. 
+% This is illustrated by |waveform_mean| in the |units| table below. 
+% On the other hand, if the column is a custom name, it must be added by setting 
+% |DynamicTable.vectordata.set('name', VectorData)| (e.g. |'quality'|)
+% below. You can see what the default column names for |units| are by
+% typing |nwb.units|. |colnames|, |description|, |id|, |vectordata|, 
+% |vectorindex| and |help| are all |DynamicTable| properties, but the
+% others are default columns.
+%
+% 2) Each row of a column is an array of varying length, you must add two objects, a
+% |VectorData| and a |VectorIndex|. The |VectorData| object stores all of
+% the data. For instance for spike times, it stores all of the spike times
+% for the first cell, then the second, then the third, all the way up in a
+% single array. The |VectorIndex| object indicates where to slice the
+% |VectorData| object in order to get just the data for a specific row.
+% A convenience function |util.create_indexed_column| is supplied to make
+% the creation of these objects easier. Its usage is demonstrated for
+% 'spike_times' and 'obs_invervals'.
+%
+% 3) If a column is a reference to another table, it should not be a
+% |VectorData| but instead a |DynamicTableRegion| object, which can be 
+% indexed with a |VectorIndex| just like |VectorData| objects to create an 
+% array of references per row. You can create a |DynamicTableRegion| 
+% |VectorIndex| pair by using |util.create_indexed_column| and including 
+% the |ObjectView| of the table as the 5th argument. 
 
-%% Processing Modules
-% Measurements go in |acquisition| and subject or session data goes in
-% |general|, but if you have the result of an analysis, e.g. spike times,
-% you need to store this in a processing module. Here we make a processing
-% module called "cellular"
+% First, instantiate the table, listing all of the columns that will be
+% added and us the |'id'| argument to indicate the number of rows. Ifa
+% value is indexed, only the column name is included, not the index. For
+% instance, |'spike_times_index'| is not added to the array.
+nwb.units = types.core.Units( ...
+    'colnames', {'spike_times', 'waveform_mean', 'quality', 'electrodes'}, ...
+    'description', 'units table', ...
+    'id', types.core.ElementIdentifiers('data', int64(0:2)));
 
-cell_mod = types.core.ProcessingModule('description', 'a test module');
+% Then you can add the data column-by-column:
+waveform_mean = types.core.VectorData('data', ones(30, 3), ...
+    'description', 'mean of waveform');
+nwb.units.waveform_mean = waveform_mean;
 
-%% Spikes
-% There are two different ways of storing spikes (aka action potentials),
-% |Clustering| and |UnitTimes|. |Clustering| is more strightforward, and is used to mark
-% measured threshold crossings that are spike-sorted into different clusters,
-% indicating that they are believed to come from different neurons. The
-% advantage of this structure is that it is easy to write data via a stream
-% and it is easy to query based on time window (since the timestamps are 
-% ordered).
+quality = types.core.VectorData('data', [.9, .1, .2],...
+    'description', 'sorting quality score out of 1');
+nwb.units.vectordata.set('quality', quality);
 
-spike_times = [0.1, 0.21, 0.34, 0.36, 0.4, 0.43, 0.5, 0.61, 0.66, 0.69];
-cluster_ids = [0, 0, 1, 1, 2, 2, 0, 0, 1, 1];
-
-clustering = types.core.Clustering( ...
-    'description', 'my_description',...
-    'peak_over_rms',[1,2,3],...
-    'times', spike_times, ...
-    'num', cluster_ids);
-
-cell_mod.nwbdatainterface.set('clustering',clustering);
-nwb.processing.set('cellular', cell_mod);
-
-%%
-% The other structure is within the |units| table, which is organized by cell instead of
-% by time. The advantage of |units| is that it is more
-% parallel-friendly. It is easier to split the computation of by cells are
-% read/write in parallel, distributing the cells across the cores of your
-% computation network.
-%%
-% 
-% <<UnitTimes.png>>
-% 
-%%
-
-[spike_times_vector, spike_times_index] = util.create_spike_times(cluster_ids, spike_times);
-nwb.units = types.core.Units('colnames',{'spike_times','spike_times_index'},...
-    'description','units table',...
-    'id', types.core.ElementIdentifiers('data',1:length(spike_times_index.data)));
+spike_times_cells = {[0.1, 0.21, 0.5, 0.61], [0.34, 0.36, 0.66, 0.69], [0.4, 0.43]};
+[spike_times_vector, spike_times_index] = util.create_indexed_column( ...
+    spike_times_cells, '/units/spike_times');
 nwb.units.spike_times = spike_times_vector;
 nwb.units.spike_times_index = spike_times_index;
 
+[electrodes, electrodes_index] = util.create_indexed_column( ...
+    {[0,1], [1,2], [2,3]}, '/units/electrodes', [], [], ...
+    electrodes_object_view);
+nwb.units.electrodes = electrodes;
+nwb.units.electrodes_index = electrodes_index;
+
+%% Side note about electrodes
+% In the above example, we assigned multiple electrodes to each unit. This
+% is useful in some recording setups, where electrodes are close together
+% and multiple electrodes pick up signal from a single cell. In other
+% instances, it makes more sense to only assign a single electrode per
+% cell. In this case you do not need to define an |electrodes_index|.
+% Instead, you can add electrodes like this:
+
+% clear electrodes_index (not generally necessary)
+nwb.units.electrodes_index = [];
+
+% assign DynamicTableRegion object with n elements
+nwb.units.electrodes = types.core.DynamicTableRegion( ...
+    'table', electrodes_object_view, ...
+    'description', 'single electrodes', ...
+    'data', int64([0, 0, 1]));
+
+%% Processing Modules
+% Measurements go in |acquisition| and subject or session data goes in
+% |general|, but if you have the intermediate processing results, you
+% should put them in a processing module.
+
+ecephys_mod = types.core.ProcessingModule('description', 'contains clustering data');
+
+%%
+% The |Clustering| data structure holds information about the spike-sorting
+% process. |units| should be used in most cases, but |Clustering| can be
+% useful for some specific applications like streaming spike sorting results
+% directly from an acquisition system.
+
+clustering = types.core.Clustering( ...
+    'description', 'my_description', ...
+    'peak_over_rms', [1, 2, 3], ...
+    'times', [0.1, 0.2, 0.3, 0.4, 0.5], ...
+    'num', int64([0, 0, 1, 1, 2]));
+
+ecephys_mod.nwbdatainterface.set('clustering', clustering);
+
+%%
+% I am going to call this processing module "ecephys." As a convention, I 
+% use the names of the NWB core namespace modules as the names of my 
+% processing modules, however this is not a rule and you may use any name.
+
+nwb.processing.set('ecephys', ecephys_mod);
 
 %% Writing the file
 % Once you have added all of the data types you want to a file, you can save
@@ -194,7 +268,7 @@ nwb.units.spike_times_index = spike_times_index;
 nwbExport(nwb, 'ecephys_tutorial.nwb')
 
 %% Reading the file
-% load an NWB file object into memory with
+% load an NWB file object with
 
 nwb2 = nwbRead('ecephys_tutorial.nwb');
 
@@ -204,23 +278,22 @@ nwb2 = nwbRead('ecephys_tutorial.nwb');
 % you only read data to memory when you need it, and only read the data you
 % need. Notice the command
 
-disp(nwb2.acquisition.get('ECoG').data)
+disp(nwb2.acquisition.get('multielectrode_recording').data)
 
 %%
 % returns a DataStub object and does not output the values contained in 
 % |data|. To get these values, run
 
-data = nwb2.acquisition.get('ECoG').data.load;
+data = nwb2.acquisition.get('multielectrode_recording').data.load;
 disp(data(1:10, 1:10));
 
 %%
-% Loading all of the data is not a problem for this small
-% dataset, but it can be a problem when dealing with real data that can be
-% several GBs or even TBs per session. In these cases you can load a specific secion of
+% Loading all of the data can be a problem when dealing with real data that can be
+% several GBs or even TBs per session. In these cases you can load a specific section of
 % data. For instance, here is how you would load data starting at the index
 % (1,1) and read 10 rows and 20 columns of data
 
-nwb2.acquisition.get('ECoG').data.load([1,1], [10,20])
+nwb2.acquisition.get('multielectrode_recording').data.load([1,1], [10,20])
 
 %%
 % run |doc('types.untyped.DataStub')| for more details on manual partial
@@ -234,27 +307,34 @@ window = [-.05, 0.5]; % seconds
 % only data where the attribute 'correct' == 0
 conditions = containers.Map('correct', 0);
 
-% get ECoG data
-timeseries = nwb2.acquisition.get('ECoG');
+% get multielectode data
+timeseries = nwb2.acquisition.get('multielectrode_recording');
 
 [trial_data, tt] = util.loadTrialAlignedTimeSeriesData(nwb2, ...
     timeseries, window, conditions);
 
-% plot data from the first electrode for those two trials (it's just noise in this example)
-plot(tt, squeeze(trial_data(:,1,:)))
+% plot data from the first electrode for those two trials
+plot(tt, squeeze(trial_data(:, 1, :)))
 xlabel('time (seconds)')
-ylabel(['ECoG (' timeseries.data_unit ')'])
+ylabel(['data (' timeseries.data_unit ')'])
 
-%% Reading UnitTimes (RegionViews)
-% |UnitTimes| uses RegionViews to indicate which spikes belong to which cell.
-% The structure is split up into 3 datasets (see Spikes secion):
-my_spike_times = nwb.units.spike_times;
-%%
-% To get the data for cell 1, first determine the uid that equals 1.
-select = nwb.units.id.data == 1
-%%
-% Then select the corresponding spike_times_index element
-my_index = nwb.units.spike_times_index.data(select)
-%%
-% Finally, access the data that the view points to using |refresh|
-my_index.refresh(nwb)
+%% Reading indexed column (e.g. spike times)
+data = util.read_indexed_column(nwb.units.spike_times_index, nwb.units.spike_times, 2);
+
+
+%% External Links
+% NWB allows you to link to datasets within another file through HDF5
+% |ExternalLink|s. This is useful for separating out large datasets that are
+% not always needed. It also allows you to store data once, and access it 
+% across many NWB files, so it is useful for storing subject-related
+% data that is the same for all sessions. Here is an example of creating a
+% link from the Subject object from the |ecephys_tutorial.nwb| file we just
+% created in a new file.
+ 
+nwb3 = nwbfile('session_description', 'a test NWB File', ...
+    'identifier', 'mouse004_day4', ...
+    'session_start_time', session_start_time);
+nwb3.general_subject = types.untyped.ExternalLink('ecephys_tutorial.nwb',...
+    '/general/subject');
+ 
+nwbExport(nwb3, 'link_test.nwb')

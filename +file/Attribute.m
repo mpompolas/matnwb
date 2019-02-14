@@ -22,7 +22,7 @@ classdef Attribute < handle
             obj.readonly = false;
             obj.dtype = '';
             obj.dependent = '';
-            obj.scalar = false;
+            obj.scalar = true;
             obj.shape = {};
             obj.dimnames = {};
             
@@ -59,6 +59,11 @@ classdef Attribute < handle
                 obj.dimnames = {obj.name};
             else
                 [obj.shape, obj.dimnames] = file.procdims(shape, dims);
+                if ischar(obj.shape)
+                    obj.scalar = ~strcmp(obj.shape, 'Inf');
+                elseif iscellstr(obj.shape)
+                    obj.scalar = ~any(strcmp(obj.shape, 'Inf'));
+                end
             end
             
             obj.dtype = file.mapType(source.get('dtype'));
