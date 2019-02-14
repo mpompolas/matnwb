@@ -7,3 +7,9 @@ workspace/
 *.asv
 *.swp
 .DS_Store
+*.nwb
+*.mat
+*.1
+*.dat
+*.lfp
+*.evt
