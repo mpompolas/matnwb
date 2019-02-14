@@ -394,28 +394,18 @@ title 'Channel 2 loaded from .nwb'
 
 %% Check that the bz_GetSpikes works
 
-
-%  spikeGroups     -vector subset of shank IDs to load (Default: all)
-%    region          -string region ID to load neurons from specific region
-%                     (requires sessionInfo file or units->structures in xml)
-%    UID             -vector subset of UID's to load 
-%    basepath        -path to recording (where .dat/.clu/etc files are)
-%    getWaveforms    -logical (default=true) to load mean of raw waveform data
-%    forceReload     -logical (default=false) to force loading from
-%                     res/clu/spk files
-%    saveMat         -logical (default=false) to save in buzcode format
-%    noPrompts       -logical (default=false) to supress any user prompts
-%    
-
-
 % NWB functions
 nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41.nwb';
 
-spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'UID',[2 4 6]); % Selection of specific neurons
-spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'spikeGroups', [2,4]); % Selection of specific Shanks
-spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'region', 'unknown'); % Selection of specific Region
 
-spikes_selected_new = bz_GetSpikes_bypass_clu_fet_spk_NWB('nwb_file', nwb_file, 'UID',[2 4 6],'saveMat',true); % Selection of specific neurons
+% FOR NOW IT IS ASSUMED THAT THE SESSIONINFO.MAT FILE IS ON THE SAME PATH
+% AS THE NWB
+
+spikes_selected_new = bz_GetSpikes_NWB('nwb_file', nwb_file, 'UID',[2 4 6]); % Selection of specific neurons
+spikes_selected_new = bz_GetSpikes_NWB('nwb_file', nwb_file, 'spikeGroups', [2,4]); % Selection of specific Shanks
+spikes_selected_new = bz_GetSpikes_NWB('nwb_file', nwb_file, 'region', 'unknown'); % Selection of specific Region
+
+spikes_selected_new = bz_GetSpikes_NWB('nwb_file', nwb_file, 'UID',[2 4 6],'saveMat',true); % Selection of specific neurons
 
 
 
@@ -440,22 +430,38 @@ spikes_selected = bz_GetSpikes('region', 'uknown'); % Selection of specific neur
 [ cellinfo,filename ] = bz_LoadCellinfo('F:\NWBtoBuzcode\YutaMouse41-150903','spikes');
 
 
+
+
+
+
+[ cellinfo_new,filename ] = bz_LoadCellinfo('C:\Users\McGill\Documents\GitHub\buzcode\tutorials\exampleDataStructs\20170505_396um_0um_merge');
+
+
+
+
+
+
+
+
+
+
 %% Work on Behavior
 
 nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41.nwb';
+nwb2 = nwbRead(nwb_file);
 
 
-createBehaviorFiles_NWB(nwb_file)
+% createBehaviorFiles_NWB(nwb_file)
 
 
 % Test that it works
-[ behavior,filename ] = bz_LoadBehavior( 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41');
+behavior = bz_LoadBehavior( 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41');
 
-THE SENSOR DATA DON'T SEEM TO BE VERY WELL ORGANIZED ON THE EXAMPLE DATASET
-SENSOR0 AND SENSOR1 ARE 2-DIMENSIONAL
-
-CHECK IF X AND Y ARE NEEDED ON THE BEHAVIOR MAT FILES
-
+% THE SENSOR DATA DON'T SEEM TO BE VERY WELL ORGANIZED ON THE EXAMPLE DATASET
+% SENSOR0 AND SENSOR1 ARE 2-DIMENSIONAL
+% 
+% CHECK IF X AND Y ARE NEEDED ON THE BEHAVIOR MAT FILES
+% 
 
 
 behavior = bz_LoadBehavior_NWB(nwb2);

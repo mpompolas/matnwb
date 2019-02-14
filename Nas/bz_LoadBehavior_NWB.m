@@ -47,24 +47,25 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
     % Fill the behavior 
     behavior = struct; % Initialize
 
-    behavior.samplingRate       = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).starting_time_rate;
+    behavior.samplingRate = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).starting_time_rate;
+    behavior.units        = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).data_unit;
 
-    Info = allBehaviorKeys(iBehavior);
-    behavior.description        = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).description;
+    Info = allBehaviorKeys{iBehavior};
+    behavior.description  = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).description;
 
     % Check if timestamps and data have values. If not something weird
     % is going on
     if ~isempty(nwb2.acquisition.get(allBehaviorKeys(iBehavior)).timestamps)
-        behavior.timestamps     = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).timestamps.load;
+        behavior.timestamps = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).timestamps.load;
     else
         behavior.timestamps     = [];
-        warning(['Behavior: ' Info{1} ' --- Timestamps are empty: weird'])
+        warning(['Behavior: ' Info ' --- Timestamps are empty: weird'])
     end
     if ~isempty(nwb2.acquisition.get(allBehaviorKeys(iBehavior)).data)
-        datasubstruct.data     = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).data.load;
+        datasubstruct.data = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).data.load;
     else
-        datasubstruct.data     = [];
-        warning(['Behavior: ' Info{1} ' --- Data is empty: weird'])
+        datasubstruct.data = [];
+        warning(['Behavior: ' Info ' --- Data is empty: weird'])
     end
 
 
@@ -74,13 +75,8 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
     % rotationType: euler or quaternion[default]
     % pupil: .x, .y, .diameter
 
-    behaviorinfo.description          = 'Fill Me';
-    behaviorinfo.acquisitionsystem    = 'Fill Me';
-    behaviorinfo.substructnames       = {'data', 'reference_frame', 'starting_time_unit', 'timestamps_interval', 'comments', 'control' 'control_description', 'data_resolution', 'units', 'starting_time', 'help'};
-    behavior.behaviorinfo         = behaviorinfo;
 
 %       datasubstruct.reference_frame     = nwb2.acquisition.get(all_raw_keys(allBehaviorKeys(iBehavior))).reference_frame; This seems to be present only on the position_sensor channels
-    datasubstruct.units               = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).data_unit;
     datasubstruct.starting_time_unit  = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).starting_time_unit;
     datasubstruct.timestamps_interval = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).timestamps_interval;
     datasubstruct.comments            = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).comments;
@@ -90,12 +86,38 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
     datasubstruct.starting_time       = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).starting_time;
     datasubstruct.help                = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).help;
 
-    behavior.datasubstruct        = datasubstruct;
+    
+    
+    %% Exclude special characters from the behavior name
+    BehaviorLabel = allBehaviorKeys{iBehavior};    
+    
+    clean_string = regexprep(BehaviorLabel,'[^a-zA-Z0-9_]','');
+    if ~strcmp(clean_string, BehaviorLabel)
+        disp(['The variable name (' BehaviorLabel ') of the Behavior was changed to exclude special characters'])
+        BehaviorLabel = clean_string;
+    end
+    behavior.(BehaviorLabel)    = datasubstruct;
+    
+    % BehaviorInfo
+    behaviorinfo.description       = nwb2.acquisition.get(allBehaviorKeys(iBehavior)).description;
+    behaviorinfo.acquisitionsystem = 'Fill Me';
+    behaviorinfo.substructnames    = {BehaviorLabel};
+    behavior.behaviorinfo          = behaviorinfo;
+
+
+    
+    %% Fill the events substructure
+    events = 
     
     
     
     
-    %Check that the behavior structure meets buzcode standards
+    
+    
+    
+    
+    
+    %% Check that the behavior structure meets buzcode standards
     [isBehavior] = bz_isBehavior(behavior);
     switch isBehavior
         case false
