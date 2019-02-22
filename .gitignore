@@ -7,6 +7,7 @@ workspace/
 *.asv
 *.swp
 .DS_Store
+<<<<<<< HEAD
 *.dat
 *.nwb
 *.evt
@@ -19,3 +20,11 @@ workspace/
 *.mat
 *.lfp
 *.1
+=======
+*.nwb
+*.mat
+*.1
+*.dat
+*.lfp
+*.evt
+>>>>>>> master
