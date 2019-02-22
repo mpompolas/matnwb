@@ -107,7 +107,7 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
 
     
     %% Fill the events substructure
-    events = 
+%     events = 
     
     
     

@@ -470,7 +470,6 @@ behavior = bz_LoadBehavior_NWB(nwb2);
 
 %% Create events file
 
-
 nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41.nwb';
 nwb2 = nwbRead(nwb_file);
 
