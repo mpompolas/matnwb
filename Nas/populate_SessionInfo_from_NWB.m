@@ -45,7 +45,7 @@ try
     all_lfp_keys = keys(nwb2.processing.get('ecephys').nwbdatainterface.get('LFP').electricalseries);
 
     for iKey = 1:length(all_lfp_keys)
-        if ismember(all_lfp_keys{iKey}, {'all_lfp','bla bla bla'})   %%%%%%%% ADD MORE HERE, DON'T KNOW WHAT THE STANDARD FORMATS ARE
+        if ismember(all_lfp_keys{iKey}, {'lfp','bla bla bla'})   %%%%%%%% ADD MORE HERE, DON'T KNOW WHAT THE STANDARD FORMATS ARE
             iLFPDataKey = iKey;
             LFPDataPresent = 1;
             break % Once you find the data don't look for other keys/trouble
@@ -110,32 +110,39 @@ end
 % group_name = nwb2.general_extracellular_ephys_electrodes.vectordata.get('group_name').data;
 % imp = nwb2.general_extracellular_ephys_electrodes.vectordata.get('imp').data.load;
 location = nwb2.general_extracellular_ephys_electrodes.vectordata.get('location').data;
-shank = nwb2.general_extracellular_ephys_electrodes.vectordata.get('shank').data.load;
+% shank = nwb2.general_extracellular_ephys_electrodes.vectordata.get('shank').data.load;
 % x = nwb2.general_extracellular_ephys_electrodes.vectordata.get('x').data.load;
 % y = nwb2.general_extracellular_ephys_electrodes.vectordata.get('y').data.load;
 % z = nwb2.general_extracellular_ephys_electrodes.vectordata.get('z').data.load;
 
 
-nGroups = sum(unique(shank)>0); % -1 doesn't belong to a Shank Group
+
+
+
+% nGroups = sum(unique(shank)>0); % -1 doesn't belong to a Shank Group
+nGroups = length(unique(nwb2.general_extracellular_ephys_electrodes.vectordata.get('group_name').data));
+uniqueGroupNames = unique(nwb2.general_extracellular_ephys_electrodes.vectordata.get('group_name').data);
+groupNames = nwb2.general_extracellular_ephys_electrodes.vectordata.get('group_name').data;
+
 
 sessionInfo.spikeGroups.nGroups  = nGroups;
 sessionInfo.spikeGroups.nSamples = ones(1,sessionInfo.spikeGroups.nGroups)*32; % The file I found had 32 here
 
 
-id = nwb2.general_extracellular_ephys_electrodes.vectordata.get('amp_channel_id').data.load;
+id = nwb2.general_extracellular_ephys_electrodes.vectordata.get('amp_channel').data.load;
 
 
 sessionInfo.spikeGroups.groups = cell(1,sessionInfo.spikeGroups.nGroups);
 for iGroup = 1:sessionInfo.spikeGroups.nGroups
-    sessionInfo.spikeGroups.groups{iGroup} = id(shank == iGroup)';
+    sessionInfo.spikeGroups.groups{iGroup} = id(ismember(groupNames, uniqueGroupNames{iGroup}))';
     
     % Redundant
-    for iChannel = 1:length(id(shank == iGroup)')
+    for iChannel = 1:length(id(ismember(groupNames, uniqueGroupNames{iGroup}))')
         sessionInfo.ElecGp{1,iGroup}.channel{1,iChannel} = sessionInfo.spikeGroups.groups{iGroup}(iChannel);
     end
     
     % Redundant
-    sessionInfo.SpkGrps(iGroup).Channels   = id(shank == iGroup)';
+    sessionInfo.SpkGrps(iGroup).Channels   = id(ismember(groupNames, uniqueGroupNames{iGroup}))';
     sessionInfo.SpkGrps(iGroup).nSamples   = 32;
     sessionInfo.SpkGrps(iGroup).PeakSample = 16; 
     sessionInfo.SpkGrps(iGroup).nFeatures  = 3; 
@@ -232,7 +239,7 @@ ichannel = 1;
 
 lfp     = bz_GetLFP(    [1 2 3 4 10 17], 'restrict', [0,120 ; 240 265], 'downsample', 5); % Make sure the .lfp is on the same folder as the sessionInfo.mat and there is ONLY ONE .lfp in the folder
 
-lfp_new = bz_GetLFP_NWB([1  2 4 6], 'downsample', 5); % Make sure the .nwb is on the same folder as the sessionInfo.mat and there is ONLY ONE .nwb in the folder
+lfp_new = bz_GetLFP_NWB([1  2 4 6], 'downsample', 2); % Make sure the .nwb is on the same folder as the sessionInfo.mat and there is ONLY ONE .nwb in the folder
 lfp_new = bz_GetLFP_NWB([1 2 3 4 10 17]); % Make sure the .nwb is on the same folder as the sessionInfo.mat and there is ONLY ONE .nwb in the folder
 
 
@@ -240,7 +247,7 @@ lfp_new = bz_GetLFP_NWB([1 2 3 4 10 17]); % Make sure the .nwb is on the same fo
 lfp     = bz_GetLFP(1);
 
 
-lfp_new = bz_GetLFP_NWB(1);
+lfp_new = bz_GetLFP_NWB([1,30]);
 
 
 
@@ -401,18 +408,18 @@ nwb_file = 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMouse41\YutaMouse41.
 % FOR NOW IT IS ASSUMED THAT THE SESSIONINFO.MAT FILE IS ON THE SAME PATH
 % AS THE NWB
 
-spikes_selected_new = bz_GetSpikes_NWB('nwb_file', nwb_file, 'UID',[2 4 6]); % Selection of specific neurons
+spikes_selected_new = bz_GetSpikes_NWB('nwb_file', nwb_file, 'UID',[2 4 7]); % Selection of specific neurons
 spikes_selected_new = bz_GetSpikes_NWB('nwb_file', nwb_file, 'spikeGroups', [2,4]); % Selection of specific Shanks
 spikes_selected_new = bz_GetSpikes_NWB('nwb_file', nwb_file, 'region', 'unknown'); % Selection of specific Region
 
-spikes_selected_new = bz_GetSpikes_NWB('nwb_file', nwb_file, 'UID',[2 4 6],'saveMat',true); % Selection of specific neurons
+spikes_selected_new = bz_GetSpikes_NWB('nwb_file', nwb_file, 'UID',[2 4 7],'saveMat',true); % Selection of specific neurons
 
 
 
 % Buzsaki functions
-spikes_selected = bz_GetSpikes('UID',[2 4 6]); % Selection of specific neurons
+spikes_selected = bz_GetSpikes('UID',[2 4 7]); % Selection of specific neurons
 spikes_selected = bz_GetSpikes('spikeGroups', [2,4]); % Selection of specific neurons
-spikes_selected = bz_GetSpikes('region', 'uknown'); % Selection of specific neurons
+spikes_selected = bz_GetSpikes('region', 'unknown'); % Selection of specific neurons
 
 
 
@@ -464,7 +471,7 @@ behavior = bz_LoadBehavior( 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMou
 % 
 
 
-behavior = bz_LoadBehavior_NWB(nwb2);
+behavior_asdfasdf = bz_LoadBehavior_NWB(nwb2);
 
 
 

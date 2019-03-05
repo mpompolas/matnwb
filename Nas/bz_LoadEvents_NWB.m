@@ -6,13 +6,13 @@ function events = bz_LoadEvents_NWB(nwb2,eventsName)
 
     % Check if an events field exists in the dataset
     try
-        events_exist_here = ~isempty(nwb2.processing.get('events').nwbdatainterface);
+        events_exist_here = ~isempty(nwb2.stimulus_presentation);
         if ~events_exist_here
             disp('No events in this .nwb file')
             return
             
         else
-            all_event_keys = keys(nwb2.processing.get('events').nwbdatainterface);
+            all_event_keys = keys(nwb2.stimulus_presentation);
             disp(' ')
             disp('The following event types are present in this dataset')
             disp('------------------------------------------------')
@@ -40,7 +40,7 @@ function events = bz_LoadEvents_NWB(nwb2,eventsName)
     
     events = struct;
 
-    events.timestamps                      = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).timestamps.load;% neuroscope compatible matrix with 1-2 columns - [starts stops] (in seconds)  
+    events.timestamps                      = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).timestamps.load;% neuroscope compatible matrix with 1-2 columns - [starts stops] (in seconds)  
     events.detectorinfo.detectorname       = 'N/A';% substructure with information about the detection method (fields below)
     events.detectorinfo.detectionparms     = 'N/A';% parameters used for detection  
     events.detectorinfo.detectiondate      = 'N/A';% date of detection
@@ -54,20 +54,20 @@ function events = bz_LoadEvents_NWB(nwb2,eventsName)
 
 
     % I add here the rest of the parameters that are saved on the nwb file
-    events.starting_time_unit  = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).starting_time_unit;
-    events.timestamps_interval = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).timestamps_interval;
-    events.timestamps_unit     = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).timestamps_unit;
-    events.comments            = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).comments;
-    events.control             = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).control;
-    events.control_description = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).control_description;
-    events.data                = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).data;
-    events.data_conversion     = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).data_conversion;
-    events.data_resolution     = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).data_resolution;
-    events.data_unit           = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).data_unit;
-    events.description         = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).description;
-    events.starting_time       = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).starting_time;
-    events.starting_time_rate  = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).starting_time_rate;
-    events.help                = nwb2.processing.get('events').nwbdatainterface.get(all_event_keys{iEvent}).help;
+    events.starting_time_unit  = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).starting_time_unit;
+    events.timestamps_interval = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).timestamps_interval;
+    events.timestamps_unit     = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).timestamps_unit;
+    events.comments            = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).comments;
+    events.control             = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).control;
+    events.control_description = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).control_description;
+    events.data                = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).data;
+    events.data_conversion     = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).data_conversion;
+    events.data_resolution     = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).data_resolution;
+    events.data_unit           = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).data_unit;
+    events.description         = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).description;
+    events.starting_time       = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).starting_time;
+    events.starting_time_rate  = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).starting_time_rate;
+    events.help                = nwb2.stimulus_presentation.get(all_event_keys{iEvent}).help;
     
     
     
