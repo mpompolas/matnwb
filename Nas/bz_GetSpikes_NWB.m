@@ -212,12 +212,12 @@ function spikes = get_the_spikes_from_selected_UIDs(UID, nwb2, sessionInfo, save
 
     spikes.times        = times;
     spikes.shankID      = shankID_of_selected_Neurons;
-    spikes.cluID        = ones(1,length(UID))*(-1);   % THESE ARE THE SPIKING TEMPLATES. THEY ARE FILLED FROM KILOSORT. I ADD A NEGATIVE VALUE TO SEE IF IT CAUSES AN ERROR SOMEWHERE
+    spikes.cluID        = ones(1,length(UID))*(-1);      % THESE ARE THE SPIKING TEMPLATES. THEY ARE FILLED FROM KILOSORT. I ADD A NEGATIVE VALUE TO SEE IF IT CAUSES AN ERROR SOMEWHERE
     spikes.rawWaveform  = rawWaveform;
     spikes.maxWaveformCh = ones(1,length(UID))*(-1);     % THESE ASSIGN THE MAXIMUM WAVEFORM TO A ACHANNEL. CHECK HOW TO ADD THIS. I ADD A NEGATIVE VALUE TO SEE IF IT CAUSES AN ERROR SOMEWHERE
     spikes.sessionName  = sessionInfo.FileName;
     spikes.numcells     = length(UID);
-    spikes.spindices    = spindices;            % This holds the timing of each spike, sorted, and the neuron it belongs to.
+    spikes.spindices    = spindices;                     % This holds the timing of each spike, sorted, and the neuron it belongs to.
 
     spikes.region = all_region(UID);
 

@@ -45,11 +45,16 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
     behavior = struct; % Initialize
 
     
-    % Select the key that is saved here
-    warning('THE FIRST subKEY IS LOADED HERE - IMPROVE')
-    allBehaviorSUBKeys = keys(nwb2.processing.get('behavior').nwbdatainterface.get(allBehaviorKeys(iBehavior)).spatialseries);
-    
-    selected_behavior = nwb2.processing.get('behavior').nwbdatainterface.get(allBehaviorKeys(iBehavior)).spatialseries.get(allBehaviorSUBKeys{2}); % This is for easier reference through the code
+    % Select the key that is within the Behavior selection
+    allBehaviorSUBKeys = keys(nwb2.processing.get('behavior').nwbdatainterface.get(allBehaviorKeys(iBehavior)).spatialseries);    
+    if length(allBehaviorSUBKeys)>1
+        [iSubKeyBehavior, ~] = listdlg('PromptString','Multiple Behavior channel-selections within the selected behavior',...
+                                     'ListString',allBehaviorSUBKeys,'SelectionMode','single');
+    else
+        iSubKeyBehavior = 1;
+    end
+        
+    selected_behavior = nwb2.processing.get('behavior').nwbdatainterface.get(allBehaviorKeys(iBehavior)).spatialseries.get(allBehaviorSUBKeys{iSubKeyBehavior}); % This is for easier reference through the code
 
     
     warning('THE SAMPLING RATE IS NOT REGULAR HERE - IMPROVE')
@@ -171,11 +176,6 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
         % Find the indices of the timestamps that are selected
         
         position_timestamps =  selected_behavior.timestamps.load;
-% % %         
-% % %   position_timestamps = nwb2.processing.get('behavior').nwbdatainterface.get('OpenFieldPosition_New_position').spatialseries.get('OpenFieldPosition_New_norm_spatial_series').timestamps.load
-% % %   position_timestamps = nwb2.processing.get('behavior').nwbdatainterface.get('EightMazePosition_position').spatialseries.get('EightMazePosition_norm_spatial_series').timestamps.load
-% % %   position_timestamps = nwb2.processing.get('behavior').nwbdatainterface.get('OpenFieldPosition_ExtraLarge_position').spatialseries.get('OpenFieldPosition_ExtraLarge_norm_spatial_series').timestamps.load
-% % %         
         
         trialTimestampBounds = [nwb2.intervals_trials.start_time.data.load nwb2.intervals_trials.stop_time.data.load];
         [~, iPositionTimestamps] = histc(trialTimestampBounds(iTrial,:), position_timestamps);
@@ -184,8 +184,7 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
             iPositionTimestamps(2) = length(position_timestamps);
         end
 
-        position = nwb2.processing.get('behavior').nwbdatainterface.get('EightMazePosition_position').spatialseries.get('EightMazePosition_norm_spatial_series').data.load([1, iPositionTimestamps(1)], [Inf, iPositionTimestamps(2)]);
-
+        position = selected_behavior.data.load([1, iPositionTimestamps(1)], [Inf, iPositionTimestamps(2)]);
 %         clr = rand(1,3);
 %         plot(position(1,:),position(2,:),'.','color',clr);
 %         drawnow
@@ -196,46 +195,83 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
             trials{1,iTrial}.y = position(2,:)';% 608 x 1
         end
         if size(position,1)>2
-            trials{1,iTrial}.y = position(3,:)';% 608 x 1
+            trials{1,iTrial}.z = position(3,:)';% 608 x 1
         end
         
 %         trials{1,iTrial}.z = 1% 608 x 1
         trials{1,iTrial}.timestamps     = position_timestamps(iPositionTimestamps(1):iPositionTimestamps(2));% 608 x 1
-        trials{1,iTrial}.mapping        = 1;% 608 x 1
     %     trials{1,iTrial}.errorPerMarker = 608 x 1
-        trials{1,iTrial}.direction      = 'FILL ME'; % 'clockwise'
-        trials{1,iTrial}.type           = 'FILL ME'; % 'central alternation'
+        trials{1,iTrial}.direction      = 'FILL ME'; % 'clockwise' 'counterclockwise'
+        trials{1,iTrial}.type           = nwb2.intervals_trials.vectordata.get('condition').data{iTrial}; % 'central alternation'
     %     trials{1,iTrial}.orientation    = % 1x1 struct
     
         % Map the trials to a 1x201 vector
-        myArray = 1:201;
+        
+        warning('MAPPING FIELD IS WRONG (?) - FIX')
+        
+        templateVector = 1:201;
         target = size(position,2);
-        n_ent = length(myArray);
-        trials{1,iTrial}.mapping = round(interp1( 1:n_ent, myArray, linspace(1, n_ent, target) ))';
+        n_ent = length(templateVector);
+        trials{1,iTrial}.mapping = round(interp1( 1:n_ent, templateVector, linspace(1, n_ent, target) ))';
     
     
     end
     
     events.trials =  trials; %   (1x221 cell)
-
     
-%     events.map % 1x10 10 unique conditions
+
+    %% Create the events.map field template
     
-FIX EVENTS.MAP HERE    
-
-
-
-
-
-
-
+    % FOR NOW I WILL USE THE MEDIAN OF ALL TRIALS FOR EACH POSITION
+    % LINE 357 in getBehav_events
     
+    map = cell(1, length(uniqueConditions));
+
+    for iCondition = 1:length(uniqueConditions)
+        iTrialsInCondition = find(strcmp(nwb2.intervals_trials.vectordata.get('condition').data, uniqueConditions{iCondition}))';
+
+        % Initialize template vectors
+        map{iCondition}.x = zeros(length(templateVector),1); % 201x1
+        x = cell(length(templateVector),1);
+        
+        if size(position,1)>1
+            map{iCondition}.y = zeros(length(templateVector),1); % 201x1
+            y = cell(length(templateVector),1);
+        end
+        if size(position,1)>2
+            map{iCondition}.z = zeros(length(templateVector),1); % 201x1
+            z = cell(length(templateVector),1);
+        end
+        
+        % Concatenate all coordinates that are assigned to each template
+        % bin
+        for iTrial = iTrialsInCondition
+            for iCoordinate = 1:length(templateVector) % 1:201
+                
+                x{iCoordinate} = [x{iCoordinate} trials{1,iTrial}.x(trials{1,iTrial}.mapping == iCoordinate)'];
+                if size(position,1)>1
+                    y{iCoordinate} = [y{iCoordinate} trials{1,iTrial}.y(trials{1,iTrial}.mapping == iCoordinate)'];
+                end
+                if size(position,1)>2
+                    z{iCoordinate} = [z{iCoordinate} trials{1,iTrial}.z(trials{1,iTrial}.mapping == iCoordinate)'];
+                end
+            end
+        end
+        
+        % Take the median (?) for each bin
+        for iCoordinate = 1:length(templateVector) % 1:201
+            map{iCondition}.x(iCoordinate) = median(x{iCoordinate});
+            if size(position,1)>1
+                map{iCondition}.y(iCoordinate) = median(y{iCoordinate});
+            end
+            if size(position,1)>2
+                map{iCondition}.z(iCoordinate) = median(z{iCoordinate});
+            end
+        end
+    end
+    
+    events.map = map;
     behavior.events = events;
-    
-    
-    
-    
-    
     
     %% Check that the behavior structure meets buzcode standards
     [isBehavior] = bz_isBehavior(behavior);
@@ -243,9 +279,4 @@ FIX EVENTS.MAP HERE
         case false
             warning('Your behavior structure does not meet buzcode standards. Sad.')
     end
-    
-    
-    
-    
 end
-

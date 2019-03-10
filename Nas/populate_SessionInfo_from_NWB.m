@@ -249,6 +249,7 @@ lfp     = bz_GetLFP(1);
 
 lfp_new = bz_GetLFP_NWB([1,30]);
 
+lfp_new = bz_GetLFP_NWB([1]);
 
 
 
@@ -471,7 +472,10 @@ behavior = bz_LoadBehavior( 'C:\Users\McGill\Documents\GitHub\matnwb\Nas\YutaMou
 % 
 
 
-behavior_asdfasdf = bz_LoadBehavior_NWB(nwb2);
+behavior = bz_LoadBehavior_NWB(nwb2);
+
+
+bz_plotTrials(behavior,'condition',1)
 
 
 
