@@ -169,15 +169,14 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
 %     nwb2.intervals_trials.vectordata.get('stim_run').data.load
 %     nwb2.intervals_trials.vectorindex
     
+    trialTimestampBounds = [nwb2.intervals_trials.start_time.data.load nwb2.intervals_trials.stop_time.data.load];
+    position_timestamps =  selected_behavior.timestamps.load;
 
     for iTrial = 1:nTrials
         
         %% Load only the samples from each trial
         % Find the indices of the timestamps that are selected
         
-        position_timestamps =  selected_behavior.timestamps.load;
-        
-        trialTimestampBounds = [nwb2.intervals_trials.start_time.data.load nwb2.intervals_trials.stop_time.data.load];
         [~, iPositionTimestamps] = histc(trialTimestampBounds(iTrial,:), position_timestamps);
         
         if iPositionTimestamps(1)~=0 && iPositionTimestamps(2)==0
@@ -185,39 +184,97 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
         end
 
         position = selected_behavior.data.load([1, iPositionTimestamps(1)], [Inf, iPositionTimestamps(2)]);
+        
+        % The boundaries struct will hold the position boundaries of each
+        % TYPE of CONDITION, for all the trials on each condition Type
+        if ~exist('boundaries')
+            if size(position,1)==1
+                boundaries = repmat(struct('x_min',0,'x_max',0),length(uniqueConditions),1);
+            elseif size(position,1)==2
+                boundaries = repmat(struct('x_min',0,'x_max',0,'y_min',0,'y_max',0),length(uniqueConditions),1);
+            elseif size(position,1)==3
+                boundaries = repmat(struct('x_min',0,'x_max',0,'y_min',0,'y_max',0,'z_min',0,'z_max',0),length(uniqueConditions),1);    
+            end
+        end
+
+        
 %         clr = rand(1,3);
 %         plot(position(1,:),position(2,:),'.','color',clr);
 %         drawnow
                 
+        % Get the index of the condition that the trials belong to - this will
+        % be used for defining the spatial boundaries of the condition
+        iConditionOfTrial = find(strcmp(uniqueConditions, nwb2.intervals_trials.vectordata.get('condition').data(iTrial)))';
+
+        
         trials{1,iTrial}.x = position(1,:)';% 608 x 1
         
+        % Allow only the succesful trials to affect the min-max at the boundaries
+        if nwb2.intervals_trials.vectordata.get('error_run').data.load(iTrial)
+            boundaries(iConditionOfTrial).x_min = min(boundaries(iConditionOfTrial).x_min, min(position(1,:)));
+            boundaries(iConditionOfTrial).x_max = max(boundaries(iConditionOfTrial).x_max, max(position(1,:)));
+        end
+
         if size(position,1)>1
             trials{1,iTrial}.y = position(2,:)';% 608 x 1
+            if nwb2.intervals_trials.vectordata.get('error_run').data.load(iTrial) % Check if the trial was successful
+                boundaries(iConditionOfTrial).y_min = min(boundaries(iConditionOfTrial).y_min, min(position(2,:)));
+                boundaries(iConditionOfTrial).y_max = max(boundaries(iConditionOfTrial).y_max, max(position(2,:)));
+            end
         end
         if size(position,1)>2
             trials{1,iTrial}.z = position(3,:)';% 608 x 1
+            if nwb2.intervals_trials.vectordata.get('error_run').data.load(iTrial) % Check if the trial was successful
+                boundaries(iConditionOfTrial).z_min = min(boundaries(iConditionOfTrial).z_min, min(position(3,:)));
+                boundaries(iConditionOfTrial).z_max = max(boundaries(iConditionOfTrial).z_max, max(position(3,:)));
+            end
         end
         
-%         trials{1,iTrial}.z = 1% 608 x 1
-        trials{1,iTrial}.timestamps     = position_timestamps(iPositionTimestamps(1):iPositionTimestamps(2));% 608 x 1
-    %     trials{1,iTrial}.errorPerMarker = 608 x 1
-        trials{1,iTrial}.direction      = 'FILL ME'; % 'clockwise' 'counterclockwise'
-        trials{1,iTrial}.type           = nwb2.intervals_trials.vectordata.get('condition').data{iTrial}; % 'central alternation'
+        trials{1,iTrial}.timestamps = position_timestamps(iPositionTimestamps(1):iPositionTimestamps(2));% 608 x 1
+        trials{1,iTrial}.direction  = 'FILL ME'; % 'clockwise' 'counterclockwise'
+        trials{1,iTrial}.type       = nwb2.intervals_trials.vectordata.get('condition').data{iTrial}; % 'central alternation'
     %     trials{1,iTrial}.orientation    = % 1x1 struct
-    
-        % Map the trials to a 1x201 vector
-        
-        warning('MAPPING FIELD IS WRONG (?) - FIX')
-        
-        templateVector = 1:201;
-        target = size(position,2);
-        n_ent = length(templateVector);
-        trials{1,iTrial}.mapping = round(interp1( 1:n_ent, templateVector, linspace(1, n_ent, target) ))';
-    
-    
+    %     trials{1,iTrial}.errorPerMarker = 608 x 1
+
     end
     
-    events.trials =  trials; %   (1x221 cell)
+    % Map the trials to a 1x201 vector
+    nBins = 201;
+    
+%     % Get different axis for each condition Type
+%     for iCondition = 1:length(uniqueConditions)
+%         xAxis(iCondition,:) = linspace(boundaries(iCondition).x_min, boundaries(iCondition).x_max, nBins);
+%         if size(position,1)>1
+%             yAxis(iCondition,:) = linspace(boundaries(iCondition).y_min, boundaries(iCondition).y_max, nBins);
+%         end
+%         if size(position,1)>2
+%             zAxis(iCondition,:) = linspace(boundaries(iCondition).z_min, boundaries(iCondition).z_max, nBins);
+%         end
+%     end
+%     
+%     
+%     for iTrial = 1:nTrials
+%         iConditionOfTrial = find(strcmp(uniqueConditions, nwb2.intervals_trials.vectordata.get('condition').data(iTrial)))';
+%         
+%         [~, iX] = histc(trials{1,iTrial}.x, xAxis(iConditionOfTrial,:)); % These start from 0 and go up to 19 (for a 20x20 grid) - I add 1 to align it properly - CHECK THAT THIS IS CORRECT
+%         if size(position,1)>1
+%             [~, iY] = histc(trials{1,iTrial}.y, yAxis(iConditionOfTrial,:));
+%         end
+%         if size(position,1)>2
+%             [~, iZ] = histc(trials{1,iTrial}.z, zAxis(iConditionOfTrial,:));
+%         end
+%     end
+    
+    
+    warning('MAPPING FIELD IS WRONG (?) - FIX')
+
+    templateVector = 1:nBins;
+    target = size(position,2);
+    n_ent = length(templateVector);
+    trials{1,iTrial}.mapping = round(interp1( 1:n_ent, templateVector, linspace(1, n_ent, target) ))';
+    
+  
+    events.trials = trials; %   (1x221 cell)
     
 
     %% Create the events.map field template
@@ -247,7 +304,6 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
         % bin
         for iTrial = iTrialsInCondition
             for iCoordinate = 1:length(templateVector) % 1:201
-                
                 x{iCoordinate} = [x{iCoordinate} trials{1,iTrial}.x(trials{1,iTrial}.mapping == iCoordinate)'];
                 if size(position,1)>1
                     y{iCoordinate} = [y{iCoordinate} trials{1,iTrial}.y(trials{1,iTrial}.mapping == iCoordinate)'];
