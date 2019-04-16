@@ -183,7 +183,11 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
             iPositionTimestamps(2) = length(position_timestamps);
         end
 
-        position = selected_behavior.data.load([1, iPositionTimestamps(1)], [Inf, iPositionTimestamps(2)]);
+        try
+            position = selected_behavior.data.load([1, iPositionTimestamps(1)], [Inf, iPositionTimestamps(2)]);
+        catch
+            error ('Error loading selected behavior file. Are there datapoints?')
+        end
         
         % The boundaries struct will hold the position boundaries of each
         % TYPE of CONDITION, for all the trials on each condition Type
@@ -208,26 +212,11 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
 
         
         trials{1,iTrial}.x = position(1,:)';% 608 x 1
-        
-        % Allow only the succesful trials to affect the min-max at the boundaries
-        if nwb2.intervals_trials.vectordata.get('error_run').data.load(iTrial)
-            boundaries(iConditionOfTrial).x_min = min(boundaries(iConditionOfTrial).x_min, min(position(1,:)));
-            boundaries(iConditionOfTrial).x_max = max(boundaries(iConditionOfTrial).x_max, max(position(1,:)));
-        end
-
         if size(position,1)>1
             trials{1,iTrial}.y = position(2,:)';% 608 x 1
-            if nwb2.intervals_trials.vectordata.get('error_run').data.load(iTrial) % Check if the trial was successful
-                boundaries(iConditionOfTrial).y_min = min(boundaries(iConditionOfTrial).y_min, min(position(2,:)));
-                boundaries(iConditionOfTrial).y_max = max(boundaries(iConditionOfTrial).y_max, max(position(2,:)));
-            end
         end
         if size(position,1)>2
             trials{1,iTrial}.z = position(3,:)';% 608 x 1
-            if nwb2.intervals_trials.vectordata.get('error_run').data.load(iTrial) % Check if the trial was successful
-                boundaries(iConditionOfTrial).z_min = min(boundaries(iConditionOfTrial).z_min, min(position(3,:)));
-                boundaries(iConditionOfTrial).z_max = max(boundaries(iConditionOfTrial).z_max, max(position(3,:)));
-            end
         end
         
         trials{1,iTrial}.timestamps = position_timestamps(iPositionTimestamps(1):iPositionTimestamps(2));% 608 x 1
@@ -238,95 +227,90 @@ function behavior = bz_LoadBehavior_NWB( nwb2,behaviorName )
 
     end
     
-    % Map the trials to a 1x201 vector
-    nBins = 201;
-    
-%     % Get different axis for each condition Type
-%     for iCondition = 1:length(uniqueConditions)
-%         xAxis(iCondition,:) = linspace(boundaries(iCondition).x_min, boundaries(iCondition).x_max, nBins);
-%         if size(position,1)>1
-%             yAxis(iCondition,:) = linspace(boundaries(iCondition).y_min, boundaries(iCondition).y_max, nBins);
-%         end
-%         if size(position,1)>2
-%             zAxis(iCondition,:) = linspace(boundaries(iCondition).z_min, boundaries(iCondition).z_max, nBins);
-%         end
-%     end
-%     
-%     
-%     for iTrial = 1:nTrials
-%         iConditionOfTrial = find(strcmp(uniqueConditions, nwb2.intervals_trials.vectordata.get('condition').data(iTrial)))';
-%         
-%         [~, iX] = histc(trials{1,iTrial}.x, xAxis(iConditionOfTrial,:)); % These start from 0 and go up to 19 (for a 20x20 grid) - I add 1 to align it properly - CHECK THAT THIS IS CORRECT
-%         if size(position,1)>1
-%             [~, iY] = histc(trials{1,iTrial}.y, yAxis(iConditionOfTrial,:));
-%         end
-%         if size(position,1)>2
-%             [~, iZ] = histc(trials{1,iTrial}.z, zAxis(iConditionOfTrial,:));
-%         end
-%     end
-    
-    
-    warning('MAPPING FIELD IS WRONG (?) - FIX')
+    % Map the trials to a 1x201 vector     
+    bins = 200;
 
-    templateVector = 1:nBins;
-    target = size(position,2);
-    n_ent = length(templateVector);
-    trials{1,iTrial}.mapping = round(interp1( 1:n_ent, templateVector, linspace(1, n_ent, target) ))';
-    
-  
-    events.trials = trials; %   (1x221 cell)
-    
+    % normalize positions to template
+    c=1;
 
-    %% Create the events.map field template
-    
-    % FOR NOW I WILL USE THE MEDIAN OF ALL TRIALS FOR EACH POSITION
-    % LINE 357 in getBehav_events
-    
-    map = cell(1, length(uniqueConditions));
+    uniqueConditions = unique((events.trialConditions));
 
     for iCondition = 1:length(uniqueConditions)
-        iTrialsInCondition = find(strcmp(nwb2.intervals_trials.vectordata.get('condition').data, uniqueConditions{iCondition}))';
 
-        % Initialize template vectors
-        map{iCondition}.x = zeros(length(templateVector),1); % 201x1
-        x = cell(length(templateVector),1);
-        
-        if size(position,1)>1
-            map{iCondition}.y = zeros(length(templateVector),1); % 201x1
-            y = cell(length(templateVector),1);
-        end
-        if size(position,1)>2
-            map{iCondition}.z = zeros(length(templateVector),1); % 201x1
-            z = cell(length(templateVector),1);
-        end
-        
-        % Concatenate all coordinates that are assigned to each template
-        % bin
-        for iTrial = iTrialsInCondition
-            for iCoordinate = 1:length(templateVector) % 1:201
-                x{iCoordinate} = [x{iCoordinate} trials{1,iTrial}.x(trials{1,iTrial}.mapping == iCoordinate)'];
-                if size(position,1)>1
-                    y{iCoordinate} = [y{iCoordinate} trials{1,iTrial}.y(trials{1,iTrial}.mapping == iCoordinate)'];
+        map{iCondition}=[];
+        t_conc=[];
+
+        iTrialsInCondition = find(events.trialConditions == uniqueConditions(iCondition) & ~nwb2.intervals_trials.vectordata.get('error_run').data.load');
+
+        for iTrial = 1:length(iTrialsInCondition)
+            disp(num2str(iTrial))
+            selected_trial = trials{iTrialsInCondition(iTrial)}; % I set this for faster typing
+
+            if size(position,1)==1
+                t_conc = [selected_trial.timestamps, selected_trial.x, 20*(selected_trial.timestamps - selected_trial.timestamps(1))]; % Check what this 20 is
+            elseif size(position,1)==2
+                t_conc = [selected_trial.timestamps, selected_trial.x selected_trial.y, 20*(selected_trial.timestamps - selected_trial.timestamps(1))]; % Check what this 20 is
+            elseif size(position,1)==3
+                t_conc = [selected_trial.timestamps, selected_trial.x selected_trial.y selected_trial.z, 20*(selected_trial.timestamps - selected_trial.timestamps(1))]; % Check what this 20 is
+            end
+            
+            % MAYBE CONSIDER USING SOMETHING FROM THE PREVIOUS CODE
+% % % % % %     warning('MAPPING FIELD IS WRONG (?) - FIX')
+% % % % % % 
+% % % % % %     templateVector = 1:nBins;
+% % % % % %     target = size(position,2);
+% % % % % %     n_ent = length(templateVector);
+% % % % % %     trials{1,iTrial}.mapping = round(interp1( 1:n_ent, templateVector, linspace(1, n_ent, target) ))';
+            disp('the computation below doesnt make the usage of this function practical for on the fly retrieval of the Behavior')
+            if length(t_conc)>=bins
+                while length(t_conc)>bins+1
+                    
+                    disp(num2str(length(t_conc)))
+                    
+                    di = pdist(t_conc);
+                    s = squareform(di);
+                    s(find(eye(size(s))))=nan;
+                    [a b] = min(s(:));
+                    [coords blah] = find(s==a);
+                    t_conc(coords(1),:) = (t_conc(coords(1),:)+t_conc(coords(2),:))./2;
+                    t_conc(coords(2),:) = [];
                 end
-                if size(position,1)>2
-                    z{iCoordinate} = [z{iCoordinate} trials{1,iTrial}.z(trials{1,iTrial}.mapping == iCoordinate)'];
-                end
+                t_conc_all(iTrial,:,:) = t_conc;
             end
         end
-        
-        % Take the median (?) for each bin
-        for iCoordinate = 1:length(templateVector) % 1:201
-            map{iCondition}.x(iCoordinate) = median(x{iCoordinate});
-            if size(position,1)>1
-                map{iCondition}.y(iCoordinate) = median(y{iCoordinate});
+        if length(iTrialsInCondition)>0
+            map{iCondition} = squeeze(median(t_conc_all(:,:,:),1));
+        end
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Assign to the right behavior field
+        events.map{iCondition}.x = map{iCondition}(:,2);
+        events.map{iCondition}.y = map{iCondition}(:,3);
+        events.map{iCondition}.z = map{iCondition}(:,4);   
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+        clear t_conc_all
+
+        disp('finding mapping...')
+        for iTrial =1:length(iTrialsInCondition)  % all trial types (rotations)
+            selected_trial = my_behavior.events.trials{iTrialsInCondition(iTrial)}; % I set this for faster typing
+            for iPoint = 1:length(selected_trial.timestamps)
+                [a b] = min(nansum(abs([selected_trial.timestamps(iPoint)-map{iCondition}(:,1),...   % Timestamp
+                                        selected_trial.x(iPoint)-map{iCondition}(:,2),...   % X_COORDINATE
+                                        selected_trial.z(iPoint)-map{iCondition}(:,3),...   % Z_COORDINATE 
+                                        selected_trial.y(iPoint)-map{iCondition}(:,4),...   % Y_COORDINATE
+                                       (selected_trial.timestamps(iPoint)-selected_trial.timestamps(1))*50-map{iCondition}(:,1),...  % penalty for time differences
+                                        (40*(iPoint./length(selected_trial.timestamps)*length(map{iCondition}) - (1:length(map{iCondition})))')])'));     % penalty for order differences
+                mapping{iCondition}{iTrial}(iPoint,:) = [map{iCondition}(b,1:end) b selected_trial.timestamps(iPoint)];
             end
-            if size(position,1)>2
-                map{iCondition}.z(iCoordinate) = median(z{iCoordinate});
-            end
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            %  Assign to the right behavior field
+            events.trials{iTrialsInCondition(iTrial)}.mapping = mapping{iCondition}{iTrial}(:,6);
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         end
     end
     
-    events.map = map;
+
     behavior.events = events;
     
     %% Check that the behavior structure meets buzcode standards
