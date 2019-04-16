@@ -119,8 +119,8 @@ nwb = nwbfile( ...
     'file_create_date'     , file_create_date,...
     'general_experimenter' , xml.generalInfo.experimenters.Text,...
     'general_session_id'   , name,...
-    'institution'          , 'NYU'  ,...
-    'lab'                  , 'Buzsaki',...
+    'general_institution'  , 'NYU'  ,...
+    'general_lab'          , 'Buzsaki',...
     'subject'              , 'YutaMouse',...
     'related_publications' , 'DOI:10.1016/j.neuron.2016.12.011');
 
@@ -129,8 +129,8 @@ nwb = nwbfile( ...
 
 
 nwb.general_subject = types.core.Subject( ...
-    'description', 'mouse 5', 'age', '9 months', ...
-    'sex', 'M', 'species', 'Mus musculus');
+    'description', 'mouse 5', 'genotype', 'POMC-Cre::Arch', 'age', '9 months', ...
+    'sex', 'M', 'subject_id', name, 'species', 'Mus musculus');
 
 
 %% Get the electrodes' info
@@ -367,8 +367,8 @@ spike_times_index = [];
 current_index = 0;
 for iNeuron = 1:length(spikes.UID)
     spike_times = [spike_times ; spikes.times{iNeuron}];
-    spike_times_index = [spike_times_index; length(spikes.times{iNeuron})+current_index];
-    current_index = spike_times_index + spike_times_index(end);
+    spike_times_index = [spike_times_index; int64(length(spikes.times{iNeuron})+current_index)];
+    current_index = spike_times_index(end);
 end
 
 
@@ -386,14 +386,10 @@ end
 
 electrode_group = types.core.VectorData('data', electrode_group, 'description','the electrode group that each spike unit came from');
 
-
 % Initialize the fields needed
 spike_times       = types.core.VectorData        ('data', spike_times, 'description', 'the spike times for each unit');
-spike_times_index = types.core.VectorIndex       ('data', spike_times_index);
+spike_times_index = types.core.VectorIndex       ('data', spike_times_index, 'target', types.untyped.ObjectView('/units/spike_times')); % The ObjectView links the indices to the spike times
 id                = types.core.ElementIdentifiers('data', [0:length(xml.units.unit)-1]');
-% electrode_group   = types.core.VectorData        ('data',electrode_group, 'description', 'the electrode group that each spike unit came from'); % THIS NEEDS TO BE AN OBJECTVIEW OBJECT
-
-
 
 % First, instantiate the table, listing all of the columns that will be
 % added and us the |'id'| argument to indicate the number of rows. Ifa
@@ -404,37 +400,6 @@ nwb.units = types.core.Units( ...
     'spike_times', spike_times, 'spike_times_index', spike_times_index, 'waveform_mean', [], 'waveform_sd', [], ...
     'colnames', {'shank_id'; 'spike_times'; 'electrode_group'; 'cell_type'; 'global_id'; 'max_electrode'}, ...
     'description', 'Generated from Neuroscope2NWB', 'id', id, 'vectordata', [], 'vectorindex', []);
-
-% Then you can add the data column-by-column:
-waveform_mean = types.core.VectorData('data', ones(30, 3), ...
-    'description', 'mean of waveform');
-nwb.units.waveform_mean = waveform_mean;
-
-quality = types.core.VectorData('data', [.9, .1, .2],...
-    'description', 'sorting quality score out of 1');
-nwb.units.vectordata.set('quality', quality);
-
-spike_times_cells = {[0.1, 0.21, 0.5, 0.61], [0.34, 0.36, 0.66, 0.69], [0.4, 0.43]};
-[spike_times_vector, spike_times_index] = util.create_indexed_column( ...
-    spike_times_cells, '/units/spike_times');
-nwb.units.spike_times = spike_times_vector;
-nwb.units.spike_times_index = spike_times_index;
-
-[electrodes, electrodes_index] = util.create_indexed_column( ...
-    {[0,1], [1,2], [2,3]}, '/units/electrodes', [], [], ...
-    electrodes_object_view);
-nwb.units.electrodes = electrodes;
-nwb.units.electrodes_index = electrodes_index;
-
-
-
-
-
-
-    
-    
-    
-
 
 
 
