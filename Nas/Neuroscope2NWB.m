@@ -113,20 +113,17 @@ file_create_date = datetime(datestr(clock), ...
 
 
 nwb = nwbfile( ...
-    'session_description'  , 'Mouse in open exploration and theta maze', ...
-    'identifier'           , name, ...
-    'session_start_time'   , session_start_time,...
-    'file_create_date'     , file_create_date,...
-    'general_experimenter' , xml.generalInfo.experimenters.Text,...
-    'general_session_id'   , name,...
-    'general_institution'  , 'NYU'  ,...
-    'general_lab'          , 'Buzsaki',...
-    'subject'              , 'YutaMouse',...
-    'related_publications' , 'DOI:10.1016/j.neuron.2016.12.011');
-
-
-
-
+    'session_description'          , 'Mouse in open exploration and theta maze', ...
+    'identifier'                   , name, ...
+    'session_start_time'           , session_start_time,...
+    'file_create_date'             , file_create_date,...
+    'general_experimenter'         , xml.generalInfo.experimenters.Text,...
+    'general_session_id'           , name,...
+    'general_institution'          , 'NYU'  ,...
+    'general_lab'                  , 'Buzsaki',...
+    'subject'                      , 'YutaMouse',...
+    'general_related_publications' , 'DOI:10.1016/j.neuron.2016.12.011',...
+    'timestamps_reference_time'    , session_start_time);
 
 nwb.general_subject = types.core.Subject( ...
     'description', 'mouse 5', 'genotype', 'POMC-Cre::Arch', 'age', '9 months', ...
@@ -211,7 +208,7 @@ nwb.general_extracellular_ephys_electrodes = electrode_table;
 
 %% Add the units info (copied from bz_GetSpikes)
 
-getWaveforms = 0; % Set this to true if you want to add waveforms on the NWB file
+getWaveforms = 1; % Set this to true if you want to add waveforms on the NWB file
 
 
 spikes.samplingRate = str2double(xml.acquisitionSystem.samplingRate.Text);
@@ -280,6 +277,9 @@ end
 % use the .res files to get spike times
 count = 1;
 
+ecephys = types.core.ProcessingModule;
+
+
 for iShank=1:length(cluFiles) 
     disp(['working on ' cluFiles(iShank).name])
     
@@ -309,12 +309,26 @@ for iShank=1:length(cluFiles)
             end
         end
         wav = permute(wav,[3 1 2]);
+        
+        
+        
+        
+        %% Get the DynamicTableRegion field for each shank
+        
+        electrodes_field = types.core.DynamicTableRegion('table',types.untyped.ObjectView('/general/extracellular_ephys/electrodes'),'description',['shank' num2str(iShank) ' region'],'data',nwb.general_extracellular_ephys_electrodes.id.data(find(tbl.shank == iShank)'));
+        SpikeEventSeries = types.core.SpikeEventSeries('data', wav, 'electrodes', electrodes_field, 'timestamps', res./ spikes.samplingRate);
+
+        %% This section assigns the spike-waveforms in the .NWB
+        ecephys.nwbdatainterface.set(['SpikeEventSeries' num2str(iShank)],SpikeEventSeries);
+        
     end
+    
     
     cells  = unique(clu);
     % remove MUA and NOISE clusters...
     cells(cells==0) = [];
     cells(cells==1) = [];  % consider adding MUA as another input argument...?
+    
     
     for c = 1:length(cells)
        spikes.UID(count) = count; % this only works if all shanks are loaded... how do we optimize this?
@@ -334,7 +348,7 @@ for iShank=1:length(cluFiles)
            end
            [aa bb] = max(a,[],2);
            spikes.rawWaveform{count} = wvforms(bb,:);
-           spikes.maxWaveformCh(count) = spkGrpChans(bb);  
+           spikes.maxWaveformCh(count) = spkGrpChans(bb);  % Use this in Brainstorm
 %            %Regions (needs waveform peak)
 %            if isfield(xml,'region') %if there is regions field in your metadata
 %                 spikes.region{count} = 'unknown';
@@ -355,10 +369,13 @@ for iShank=1:length(cluFiles)
        end
        
        count = count + 1;
+       
     end
+    
+    ecephys.description = 'intermediate data from extracellular electrophysiology recordings, e.g., LFP';
+    nwb.processing.set('ecephys', ecephys);
 end
 
-    
 
 % Serialize spiketimes and cluIDs
 spike_times       = [];
@@ -403,13 +420,132 @@ nwb.units = types.core.Units( ...
 
 
 
+%% Add events: nwb2.stimulus_presentation
+
+eventFiles = dir('*.evt');
+
+for iFile = 1:length(eventFiles)
+    
+    if ~strcmp(eventFiles(iFile).name,'YutaMouse41-150903.DS1.ch0.evt') && ~strcmp(eventFiles(iFile).name,'YutaMouse41-150903.DS2.ch0.evt') % Ignore those two files
+    
+        events = LoadEvents(eventFiles(iFile).name); % Load Events is a function from the Buzcode - THIS DOESN'T LOAD ANYTHING FOR 'PulseStim_0V_10021ms_LD0' - maybe because it has a single entrty???
+        
+        if ~isempty(events.time) && ~isempty(events.description)
+            AnnotationSeries = types.core.AnnotationSeries('data',events.description,'timestamps',events.time);
+            nwb.stimulus_presentation.set(events.description{1}, AnnotationSeries);
+        end
+    end
+
+end
+
+
+%% Add behavioral data: nwb2.processing.get('behavior').nwbdatainterface
+
+behavior = types.core.ProcessingModule;
+
+behavioralFiles = dir('*position*');
+
+for iFile = 1:length(behavioralFiles)
+    
+    % The label of the behavior
+    behavioral_Label = strsplit(behavioralFiles(iFile).name,'__');
+    behavioral_Label = erase(behavioral_Label{2},'.mat');
+    
+    position_signals = load(behavioralFiles(iFile).name);
+    
+    % Some behavioral signals might have more than one signal in them
+    field_names = fieldnames(position_signals);
+    
+    the_position_field_NWB = types.core.Position;
+    
+    for iField = 1:length(field_names)
+              
+        behavioral_timestamps = position_signals.(field_names{iField})(:,1);
+        position_coordinates  = position_signals.(field_names{iField})(:,2:end);
+        spatial_series = types.core.SpatialSeries('data', position_coordinates, 'timestamps', behavioral_timestamps, 'reference_frame', 'unknown', 'data_conversion', 1);
+        
+        the_position_field_NWB.spatialseries.set(field_names{iField}, spatial_series);
+    end
+    
+    behavior.nwbdatainterface.set(behavioral_Label,the_position_field_NWB);
+
+end
+
+behavior.description = 'Behavioral signals';
+nwb.processing.set('behavior', behavior);
+
+%% Add Electrophysiological data (LFP): nwb2.processing.get('ecephys').nwbdatainterface.get('LFP')
+
+lfpFile = dir('*.eeg');
+
+if length(lfpFile)>1
+    error('More than one .eeg files are present here. Weird')
+end
+
+
+% Get the samples number, based on the size of the file
+% Check for the precision that samples are saved first
+
+hdr.nBits     = str2double(xml.acquisitionSystem.nBits.Text);
+hdr.nChannels = str2double(xml.acquisitionSystem.nChannels.Text);
+hdr.sRateOrig = str2double(xml.acquisitionSystem.samplingRate.Text);
+hdr.Gain      = str2double(xml.acquisitionSystem.amplification.Text);
+hdr.sRateLfp  = str2double(xml.fieldPotentials.lfpSamplingRate.Text);
+
+
+% Get data type
+switch lower(hdr.nBits)
+    case 16;
+        hdr.byteSize   = 2;
+        hdr.byteFormat = 'int16';
+    case 32;
+        hdr.byteSize   = 4;
+        hdr.byteFormat = 'int32';
+end
+% Guess the number of time points based on the file size
+dirInfo = dir(lfpFile.name);
+hdr.nSamples = floor(dirInfo.bytes ./ (hdr.nChannels * hdr.byteSize));
+
+
+lfp_data = bz_LoadBinary(lfpFile.name, 'duration',Inf, 'frequency',hdr.sRateLfp,'nchannels',hdr.nChannels, 'channels', [1:size(tbl,1)]); % nSamples x 64
+
+
+electrodes_field = types.core.DynamicTableRegion('table',types.untyped.ObjectView('/general/extracellular_ephys/electrodes'),'description','electrode table reference','data',nwb.general_extracellular_ephys_electrodes.id.data);
+
+lfp = types.core.ElectricalSeries('data', lfp_data, 'electrodes',electrodes_field, 'description', 'lfp signal for all shank electrodes', 'starting_time_rate', hdr.sRateLfp);
+
+
+LFP = types.core.LFP;
+LFP.electricalseries.set('lfp',lfp);
+nwb.processing.get('ecephys').nwbdatainterface.set('LFP', LFP);
+
+
+%% Add Epochs
+
+% % % % % % % In order to define epochs, find discontinuities
+% % % % % % factor=10000
+% % % % % % def find_discontinuities(tt, factor=10000):
+% % % % % %     
+% % % % % % dt = np.diff(tt)
+% % % % % % before_jumps = np.where(dt > np.median(dt) * factor)[0]
+% % % % % % 
+% % % % % % if len(before_jumps):
+% % % % % %     out = np.array([tt[0], tt[before_jumps[0]]])
+% % % % % %     for i, j in zip(before_jumps, before_jumps[1:]):
+% % % % % %         out = np.vstack((out, [tt[i + 1], tt[j]]))
+% % % % % %     out = np.vstack((out, [tt[before_jumps[-1] + 1], tt[-1]]))
+% % % % % %     return out
+% % % % % % else:
+% % % % % %     return np.array([[tt[0], tt[-1]]])
+
+%% Add Trials
+
+
 
 
 %% Export to nwb
 
 cd (current_folder)
-
 nwbExport(nwb, 'YutaMouse41_converted.nwb')
-
 nwb3 = nwbRead('YutaMouse41_converted.nwb');
 
