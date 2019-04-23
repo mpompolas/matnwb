@@ -408,6 +408,10 @@ spike_times       = types.core.VectorData        ('data', spike_times, 'descript
 spike_times_index = types.core.VectorIndex       ('data', spike_times_index, 'target', types.untyped.ObjectView('/units/spike_times')); % The ObjectView links the indices to the spike times
 id                = types.core.ElementIdentifiers('data', [0:length(xml.units.unit)-1]');
 
+
+% FOR THE VECTORDATA I NEED FILE: DG_all_6__UnitFeatureSummary_add (PROBABLY - ACCORDING TO THE CONVERTER)
+
+
 % First, instantiate the table, listing all of the columns that will be
 % added and us the |'id'| argument to indicate the number of rows. Ifa
 % value is indexed, only the column name is included, not the index. For
@@ -445,6 +449,8 @@ behavior = types.core.ProcessingModule;
 
 behavioralFiles = dir('*position*');
 
+time_epochs = repmat(struct('label','','start_times',0,'stop_times',0),length(behavioralFiles),1);
+
 for iFile = 1:length(behavioralFiles)
     
     % The label of the behavior
@@ -468,6 +474,10 @@ for iFile = 1:length(behavioralFiles)
     end
     
     behavior.nwbdatainterface.set(behavioral_Label,the_position_field_NWB);
+    
+    time_epochs(iFile).start_times = behavioral_timestamps(1,1);
+    time_epochs(iFile).stop_times  = behavioral_timestamps(end,1);
+    time_epochs(iFile).label       = behavioral_Label;
 
 end
 
@@ -509,10 +519,9 @@ hdr.nSamples = floor(dirInfo.bytes ./ (hdr.nChannels * hdr.byteSize));
 
 lfp_data = bz_LoadBinary(lfpFile.name, 'duration',Inf, 'frequency',hdr.sRateLfp,'nchannels',hdr.nChannels, 'channels', [1:size(tbl,1)]); % nSamples x 64
 
-
 electrodes_field = types.core.DynamicTableRegion('table',types.untyped.ObjectView('/general/extracellular_ephys/electrodes'),'description','electrode table reference','data',nwb.general_extracellular_ephys_electrodes.id.data);
 
-lfp = types.core.ElectricalSeries('data', lfp_data, 'electrodes',electrodes_field, 'description', 'lfp signal for all shank electrodes', 'starting_time_rate', hdr.sRateLfp);
+lfp = types.core.ElectricalSeries('data', lfp_data, 'electrodes',electrodes_field, 'description', 'lfp signal for all shank electrodes', 'starting_time', 0, 'starting_time_rate', hdr.sRateLfp);
 
 
 LFP = types.core.LFP;
@@ -520,26 +529,84 @@ LFP.electricalseries.set('lfp',lfp);
 nwb.processing.get('ecephys').nwbdatainterface.set('LFP', LFP);
 
 
-%% Add Epochs
 
-% % % % % % % In order to define epochs, find discontinuities
-% % % % % % factor=10000
-% % % % % % def find_discontinuities(tt, factor=10000):
-% % % % % %     
-% % % % % % dt = np.diff(tt)
-% % % % % % before_jumps = np.where(dt > np.median(dt) * factor)[0]
-% % % % % % 
-% % % % % % if len(before_jumps):
-% % % % % %     out = np.array([tt[0], tt[before_jumps[0]]])
-% % % % % %     for i, j in zip(before_jumps, before_jumps[1:]):
-% % % % % %         out = np.vstack((out, [tt[i + 1], tt[j]]))
-% % % % % %     out = np.vstack((out, [tt[before_jumps[-1] + 1], tt[-1]]))
-% % % % % %     return out
-% % % % % % else:
-% % % % % %     return np.array([[tt[0], tt[-1]]])
+%% Add raw recordings
+
+% value taken from Yuta's spreadsheet
+
+% HOW ABOUT POSITION0 - POSITION1 CHANNELS???
+
+special_electrode_labels  = {'ch_wait','ch_arm','ch_solL','ch_solR','ch_dig1','ch_dig2','ch_entL','ch_entR','ch_SsolL','ch_SsolR'};
+special_electrode_indices = [79,78,76,77,65,68,72,71,73,70]; 
+
+acquisition = types.untyped.Set;
+for iSpecialElectrode = 1:length(special_electrode_labels)
+    
+    special_Electrode_data = bz_LoadBinary(lfpFile.name, 'duration',Inf, 'frequency',hdr.sRateLfp,'nchannels',hdr.nChannels, 'channels', special_electrode_indices(iSpecialElectrode));
+    single_Electrode = types.core.TimeSeries('description','environmental electrode recorded inline with neural data','data',special_Electrode_data,'starting_time', 0, 'starting_time_rate', hdr.sRateLfp, 'data_unit','V');
+    acquisition.set(special_electrode_labels{iSpecialElectrode}, single_Electrode);
+end
+
+nwb.acquisition = acquisition;
+
+
+
+%% Add Epochs
+% The epoch is defined by having a gap between recordings of the behavioral
+% signals. I assign a gap value for the time it took for a behavioral recording to
+% start again.
+
+gap_time = 1000;
+
+id_epochs = types.core.ElementIdentifiers('data',int64(0:length(time_epochs)-1)');
+
+start_time_epochs = types.core.VectorData('description','Starting timepoint of Each Epoch','data',[time_epochs.start_times]');
+stop_time_epochs  = types.core.VectorData('description','Ending timepoint of Each Epoch','data',[time_epochs.stop_times]');
+
+
+vectordata_epochs_label = types.core.VectorData('description','Label of Epoch','data',{time_epochs.label}');
+vectordata_epochs = types.untyped.Set('label', vectordata_epochs_label);
+
+intervals_epochs = types.core.TimeIntervals('start_time',start_time_epochs,'stop_time',stop_time_epochs,...
+                                           'colnames',{'start_time';'stop_time';'label'},...
+                                           'description','experimental epochs','id',id_epochs, 'vectordata',vectordata_epochs);
+
+nwb.intervals_epochs = intervals_epochs;
+
 
 %% Add Trials
 
+% This file holds a matrix with the trial info
+trialsFile = dir('*Run.mat');
+trialsInfo = load(trialsFile.name);
+the_field = fieldnames(trialsInfo);
+trialsInfo = trialsInfo.(the_field{1});
+
+% This file holds a cell array with the labels for the matrix above (...)
+runFile = dir('*RunInfo.mat');
+runInfo = load(runFile.name);
+the_field = fieldnames(runInfo);
+runInfo = runInfo.(the_field{1});
+
+
+
+start_time_trials = types.core.VectorData('description','Starting timepoint of Each Trial','data',trialsInfo(:,1));
+stop_time_trials  = types.core.VectorData('description','Ending timepoint of Each Trial','data',trialsInfo(:,2));
+
+id_trials = types.core.ElementIdentifiers('data',int64(0:size(trialsInfo,1)-1)');
+
+conditions_trials = cell(size(trialsInfo,1),1);
+for iTrial = 1:size(trialsInfo,1)
+    conditions_trials{iTrial} = runInfo{find(trialsInfo(iTrial,3:4))+2};
+end
+
+vectordata_trials = types.untyped.Set('both_visit', trialsInfo(:,7), 'condition', conditions_trials, 'error_run', trialsInfo(:,5), 'stim_run',trialsInfo(:,6));
+
+intervals_trials = types.core.TimeIntervals('start_time',start_time_trials,'stop_time',stop_time_trials,...
+                                           'colnames',{'start_time';'stop_time';'error_run';'stim_run';'both_visit';'condition'},...
+                                           'description','experimental trials','id',id_trials, 'vectordata',vectordata_trials);
+
+nwb.intervals_trials = intervals_trials;
 
 
 
