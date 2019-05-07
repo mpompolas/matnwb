@@ -244,7 +244,7 @@ lfp_new = bz_GetLFP_NWB([1 2 3 4 10 17]); % Make sure the .nwb is on the same fo
 
 
 
-lfp     = bz_GetLFP(1);
+lfp     = bz_GetLFP([1,30]);
 
 
 lfp_new = bz_GetLFP_NWB([1,30]);
