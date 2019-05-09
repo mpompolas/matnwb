@@ -296,6 +296,11 @@ classdef Neuroscope2NWB
 
 
                     %% Get the DynamicTableRegion field for each shank
+                    
+                    % First check if the electrodes field has been filled
+                    if isempty(nwb.general_extracellular_ephys_electrodes)
+                        nwb = Neuroscope2NWB.getElectrodeInfo(xml, nwb);
+                    end
 
                     electrodes_field = types.core.DynamicTableRegion('table',types.untyped.ObjectView('/general/extracellular_ephys/electrodes'),'description',['shank' num2str(iShank) ' region'],'data',nwb.general_extracellular_ephys_electrodes.id.data(find(shank == iShank)'));
                     SpikeEventSeries = types.core.SpikeEventSeries('data', wav, 'electrodes', electrodes_field, 'timestamps', res./ spikes.samplingRate);
@@ -388,21 +393,27 @@ classdef Neuroscope2NWB
             % Initialize the fields needed
             spike_times       = types.core.VectorData        ('data', spike_times, 'description', 'the spike times for each unit');
             spike_times_index = types.core.VectorIndex       ('data', spike_times_index, 'target', types.untyped.ObjectView('/units/spike_times')); % The ObjectView links the indices to the spike times
+            waveform_mean     = types.core.VectorData        ('data', spikes.rawWaveform, 'description', 'The mean Waveform for each unit');
             id                = types.core.ElementIdentifiers('data', [0:length(xml.units.unit)-1]');
 
+            
+            
+            %% Extra Unit Info
+            % FOR THE VECTORDATA, IDEALLY I NEED FILE: DG_all_6__UnitFeatureSummary_add (ACCORDING TO BEN'S CONVERTER - THIS HOLDS INFO ABOUT THE TYPE OF THE NEURONS ETC.)
 
-            % FOR THE VECTORDATA I NEED FILE: DG_all_6__UnitFeatureSummary_add (PROBABLY - ACCORDING TO THE CONVERTER)
+            all_extra_info = types.untyped.Set();
+            all_extra_info.set('cluID', types.core.VectorData('description', 'cluster ID', 'data', spikes.cluID));
+            all_extra_info.set('maxWaveformCh', types.core.VectorData('description', 'The electrode where each unit showed maximum Waveform', 'data', spikes.maxWaveformCh));
+            
+            vectordata_units = types.core.VectorData('description','additional unit information', 'data', all_extra_info);
+            
 
-
-            % First, instantiate the table, listing all of the columns that will be
-            % added and us the |'id'| argument to indicate the number of rows. Ifa
-            % value is indexed, only the column name is included, not the index. For
-            % instance, |'spike_times_index'| is not added to the array.
+            %% 
             nwb.units = types.core.Units( ...
                 'electrode_group', electrode_group, 'electrodes', [], 'electrodes_index', [], 'obs_intervals', [], 'obs_intervals_index', [], ...
-                'spike_times', spike_times, 'spike_times_index', spike_times_index, 'waveform_mean', [], 'waveform_sd', [], ...
+                'spike_times', spike_times, 'spike_times_index', spike_times_index, 'waveform_mean', waveform_mean, 'waveform_sd', [], ...
                 'colnames', {'shank_id'; 'spike_times'; 'electrode_group'; 'cell_type'; 'global_id'; 'max_electrode'}, ...
-                'description', 'Generated from Neuroscope2NWB', 'id', id, 'vectordata', [], 'vectorindex', []);
+                'description', 'Generated from Neuroscope2NWB', 'id', id, 'vectordata', vectordata_units, 'vectorindex', []);
 
         end
         
@@ -413,7 +424,7 @@ classdef Neuroscope2NWB
             eventFiles = dir([xml.folder_path filesep '*.evt']);
 
             for iFile = 1:length(eventFiles)
-                events = LoadEvents(eventFiles(iFile).name); % LoadEvents is a function from the Buzcode - THIS DOESN'T LOAD ANYTHING FOR 'PulseStim_0V_10021ms_LD0' - maybe because it has a single entrty???
+                events = LoadEvents(fullfile(eventFiles(iFile).folder,eventFiles(iFile).name)); % LoadEvents is a function from the Buzcode - THIS DOESN'T LOAD ANYTHING FOR 'PulseStim_0V_10021ms_LD0' - maybe because it has a single entrty???
 
                 if ~isempty(events.time) && ~isempty(events.description)
                     AnnotationSeries = types.core.AnnotationSeries('data',events.description,'timestamps',events.time);
@@ -498,16 +509,6 @@ classdef Neuroscope2NWB
                 behavior_NWB.nwbdatainterface.set(behavioral_Label,behavioral_signals_NWB);
                 
                 
-                %% MOVED THIS SECTION TO THE GETTRIALS
-% % % % % %                 %% Add optional events field
-% % % % % %                 if isfield(behavior, 'events')
-% % % % % %                     eventsInfo = types.untyped.Set('trials',behavior.events.trials, 'map', behavior.events.map, 'trialConditions', behavior.events.trialConditions, ...
-% % % % % %                                                    'trialIntervals', behavior.events.trialIntervals, 'conditionType', behavior.events.conditionType);    
-% % % % % %                                                
-% % % % % %                     behavioral_signals_NWB.spatialseries.set('events', eventsInfo);
-% % % % % %                     behavioral_signals_NWB
-% % % % % %                     behavior_NWB.nwbdatainterface.set(behavioral_Label,behavioral_signals_NWB);
-% % % % % %                 end
             end
 
             behavior_NWB.description = 'Behavioral signals';
@@ -546,14 +547,14 @@ classdef Neuroscope2NWB
                     hdr.byteFormat = 'int32';
             end
             % Guess the number of time points based on the file size
-            dirInfo = dir(lfpFile.name);
+            dirInfo = dir(fullfile(lfpFile.folder,lfpFile.name));
             hdr.nSamples = floor(dirInfo.bytes ./ (hdr.nChannels * hdr.byteSize));
 
 
             
             
             
-            lfp_data = bz_LoadBinary(lfpFile.name, 'duration',Inf, 'frequency',hdr.sRateLfp,'nchannels',hdr.nChannels, 'channels', [1:hdr.nChannels]); % nSamples x 64
+            lfp_data = bz_LoadBinary(fullfile(lfpFile.folder,lfpFile.name), 'duration',Inf, 'frequency',hdr.sRateLfp,'nchannels',hdr.nChannels, 'channels', [1:hdr.nChannels]); % nSamples x 64
 
             
             % If the electrode Information has not already been filled, 
@@ -584,45 +585,60 @@ classdef Neuroscope2NWB
         
         
         function nwb = getEpochs(xml,nwb)
+            % Buz function
             
             
             %% Add Epochs
-            % The epochs are based on the separate behavioral files
+            % The epochs are based on separate behavioral files
             % Each separate behavioral file = 1 epoch
             
-            behavioralFiles = dir([xml.folder_path filesep '*.position']);
+            behavioralFiles = dir([xml.folder_path filesep '*Position*']);
+            
+            intervals_epochs = types.core.TimeIntervals();
+            
+            id_epochs  = types.core.ElementIdentifiers('data',1:length(behavioralFiles));
 
-            time_epochs = repmat(struct('label','','start_times',0,'stop_times',0),length(behavioralFiles),1);
 
+            start_time_epochs = zeros(length(behavioralFiles),1); % Start time
+            stop_time_epochs  = zeros(length(behavioralFiles),1); % Stop time
+            colnames          = cell(length(behavioralFiles),1); % Labels
+            
             for iFile = 1:length(behavioralFiles)
 
+                % The label of the behavior
+                behavioral_Label = strsplit(behavioralFiles(iFile).name,'__');
+                behavioral_Label = erase(behavioral_Label{2},'.mat');
+
+                position_signals = load(fullfile(behavioralFiles(iFile).folder,behavioralFiles(iFile).name));
+
+                % Some behavioral signal files might have more than one
+                % type of signals in them (e.g. twhl_linearized, twhl_norm)
+                field_names = fieldnames(position_signals);
+
+                the_position_field_NWB = types.core.Position;
+                
                 for iField = 1:length(field_names)
-                    behavioral_timestamps = position_signals.(field_names{iField})(:,1);
-                    time_epochs(iFile).start_times = behavioral_timestamps(1,1);
-                    time_epochs(iFile).stop_times  = behavioral_timestamps(end,1);
-                    time_epochs(iFile).label       = behavioral_Label;
+                    the_position_field_NWB.spatialseries.set(field_names{iField}, types.core.SpatialSeries('description', [field_names{iField} ' position signals from ' behavioral_Label ' epoch'], 'data', position_signals.(field_names{iField})(:,2:end)));
                 end
-            
+                
+                start_time_epochs(iFile) = position_signals.(field_names{iField})(1,1);
+                stop_time_epochs(iFile)  = position_signals.(field_names{iField})(end,1);
+                colnames{iFile}              = behavioral_Label;
+
+                intervals_epochs.vectordata.set(behavioral_Label,types.core.VectorData('description', ['Position signals from ' behavioral_Label ' epoch'], 'data', the_position_field_NWB));
+                
             end
             
-            id_epochs = types.core.ElementIdentifiers('data',int64(0:length(time_epochs)-1)');
-
-            start_time_epochs = types.core.VectorData('description','Starting timepoint of Each Epoch','data',[time_epochs.start_times]');
-            stop_time_epochs  = types.core.VectorData('description','Ending timepoint of Each Epoch','data',[time_epochs.stop_times]');
-
-
-            vectordata_epochs_label = types.core.VectorData('description','Label of Epoch','data',{time_epochs.label}');
-            vectordata_epochs = types.untyped.Set('label', vectordata_epochs_label);
-
-
-            %%%%%% THE VECTORDATA IS IGNORED IN HERE - THE LABELS ARE NOT SAVED -
-            %%%%%% CHECK AGAIN
-            %%%%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-            intervals_epochs = types.core.TimeIntervals('start_time',start_time_epochs,'stop_time',stop_time_epochs,...
-                                                       'colnames',{'start_time';'stop_time';'label'},...
-                                                       'description','experimental epochs','id',id_epochs, 'vectordata',vectordata_epochs);
-
+            % Transform doubles to VectorData
+            start_time_epochs = types.core.VectorData('description','Starting timestamp of epochs', 'data', start_time_epochs);
+            stop_time_epochs  = types.core.VectorData('description','Stopping timestamp of epochs', 'data', stop_time_epochs);
+                   
+            intervals_epochs.start_time  = start_time_epochs;
+            intervals_epochs.stop_time   = stop_time_epochs;
+            intervals_epochs.description = 'Experimental epochs';
+            intervals_epochs.id          = id_epochs;
+            intervals_epochs.colnames    = colnames;
+            
             nwb.intervals_epochs = intervals_epochs;
 
         
@@ -633,54 +649,98 @@ classdef Neuroscope2NWB
         
         function nwb = getTrials(xml,nwb)
             
-            %% THIS SECTION LOADS THE INFO FROM *RUN.MAT
-% % % %             %% Add Trials
-% % % % 
-% % % %             % This file holds a matrix with the trial info
-% % % %             trialsFile = dir([xml.folder_path filesep '*Run.mat']);
-% % % %             trialsInfo = load(fullfile(trialsFile.folder, trialsFile.name));
-% % % %             the_field = fieldnames(trialsInfo);
-% % % %             trialsInfo = trialsInfo.(the_field{1});
-% % % % 
-% % % %             % This file holds a cell array with the labels for the matrix above (...)
-% % % %             runFile = dir([xml.folder_path filesep '*RunInfo.mat']);
-% % % %             runInfo = load(fullfile(runFile.folder,runFile.name));
-% % % %             the_field = fieldnames(runInfo);
-% % % %             runInfo = runInfo.(the_field{1});
-% % % % 
-% % % % 
-% % % % 
-% % % %             start_time_trials = types.core.VectorData('description','Starting timepoint of Each Trial','data',trialsInfo(:,1));
-% % % %             stop_time_trials  = types.core.VectorData('description','Ending timepoint of Each Trial','data',trialsInfo(:,2));
-% % % % 
-% % % %             id_trials = types.core.ElementIdentifiers('data',int64(0:size(trialsInfo,1)-1)');
-% % % % 
-% % % %             conditions_trials = cell(size(trialsInfo,1),1);
-% % % %             for iTrial = 1:size(trialsInfo,1)
-% % % %                 conditions_trials{iTrial} = runInfo{find(trialsInfo(iTrial,3:4))+2};
-% % % %             end
-% % % % 
-% % % %             vectordata_trials = types.untyped.Set('both_visit', trialsInfo(:,7), 'condition', conditions_trials, 'error_run', trialsInfo(:,5), 'stim_run',trialsInfo(:,6));
-% % % % 
-% % % %             intervals_trials = types.core.TimeIntervals('start_time',start_time_trials,'stop_time',stop_time_trials,...
-% % % %                                                        'colnames',{'start_time';'stop_time';'error_run';'stim_run';'both_visit';'condition'},...
-% % % %                                                        'description','experimental trials','id',id_trials, 'vectordata',vectordata_trials);
-% % % % 
-% % % %             nwb.intervals_trials = intervals_trials;
+            
+            
+            
+%             FIGURE OUT HOW TO COMBINE BOTH CASES
+%             YUTA AND NON YUTA TO LOAD FROM BZ_LOADBEHAVIOR
+%             
+%             
+%             TRY TO AVOID STORING THE .X, .Y, .Z FIELDS, AND ONLY DEAL WITH THE CONTINUOUS SIGNAL AND THE TRIAL START AND TRIAL STOP
+%             
+            
+            
+            
+            
+            
+            
+            % Just Buzcode
+            
+%             % THIS SECTION LOADS THE INFO FROM *RUN.MAT - YUTA NON STANDARD FORMAT
+%             % Add Trials
+% 
+%             % This file holds a matrix with the trial info
+%             trialsFile = dir([xml.folder_path filesep '*Run.mat']);
+%             trialsInfo = load(fullfile(trialsFile.folder, trialsFile.name));
+%             the_field = fieldnames(trialsInfo);
+%             trialsInfo = trialsInfo.(the_field{1});
+%             
+%             colname = the_field;
+% 
+%             % This file holds a cell array with the labels for the matrix above (...)
+%             runFile = dir([xml.folder_path filesep '*RunInfo.mat']);
+%             runInfo = load(fullfile(runFile.folder,runFile.name));
+%             the_field = fieldnames(runInfo);
+%             runInfo = runInfo.(the_field{1});
+% 
+% 
+%             start_time_trials = types.core.VectorData('description','Starting timepoint of Each Trial','data',{trialsInfo(:,1)});
+%             stop_time_trials  = types.core.VectorData('description','Ending timepoint of Each Trial','data',{trialsInfo(:,2)});
+% 
+%             id_trials = types.core.ElementIdentifiers('data',int64(0:size(trialsInfo,1)-1)');
+% 
+%             conditions_trials = cell(size(trialsInfo,1),1);
+%             for iTrial = 1:size(trialsInfo,1)
+%                 conditions_trials{iTrial} = runInfo{find(trialsInfo(iTrial,3:4))+2};
+%             end
+% 
+%             vectordata_trials = types.untyped.Set('both_visit', trialsInfo(:,7), 'condition', conditions_trials, 'error_run', trialsInfo(:,5), 'stim_run',trialsInfo(:,6));
+% 
+%             
+%             
+%             
+%             intervals_trials = types.core.TimeIntervals('start_time',start_time_trials,'stop_time',stop_time_trials,...
+%                                                        'colnames',{colname},...
+%                                                        'description','experimental trials','id',id_trials, 'vectordata',vectordata_trials);
+% 
+%             nwb.intervals_trials = intervals_trials;
         
+            
+            
+            
+            
+            
+            
+            
+            
             %% THIS SECTION LOADS THE TRIAL INFO FROM THE .BEHAVIOR.MAT FILES
+            % Since the behavior.mat files can be more than one, I don't
+            % fill the fields within nwb.intervals_trials
+            % I use nwb.processing
+
+            % First check if the 'behavior' field has already been created
+            % (this can be done from the getBehavior function)
+            if ~(sum(ismember(keys(nwb.processing), 'behavior')) == 1)%% Add behavioral data: nwb2.processing.get('behavior').nwbdatainterface
+                behavior_NWB = types.core.ProcessingModule;
+                behavior_NWB.description = 'Behavioral signals';
+                nwb.processing.set('behavior', behavior_NWB);
+            end
 
             
             % Just for the test, delete after
-            xml.folder_path = 'C:\Users\McGill\Documents\GitHub\buzcode\tutorials\exampleDataStructs\20170505_396um_0um_merge'
+            xml.folder_path = 'C:\Users\McGill\Documents\GitHub\buzcode\tutorials\exampleDataStructs\20170505_396um_0um_merge';
             
             
             
             behavioralFiles = dir([xml.folder_path filesep '*behavior.mat']);
             
-            trialsNWB = types.untyped.Set;
-            
-            
+            all_start_times = cell(length(behavioralFiles),1);
+            all_stop_times  = cell(length(behavioralFiles),1);
+            colnames        = cell(length(behavioralFiles),1);
+
+    
+            intervals_trials = types.core.TimeIntervals();
+
             for iFile = 1:length(behavioralFiles)
 
                 % The label of the behavior
@@ -692,55 +752,83 @@ classdef Neuroscope2NWB
                                                                    % I assumed here that the standardized way of saving behavior files is: experimentName.BehaviorLabel.behavior.mat
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 
+                colnames{iFile} = behavioral_Label;
+                
                 % Load the file
                 behaviorstruct = load(behavioralFiles(iFile).name); % The example I have has the variable "behavior" saved
                 behavior       = behaviorstruct.behavior;
 
                 
+                
                 %% This is based on the Buzcode tutorial Behavior file: 20170505_396um_0um_merge.track.behavior.mat
                 %  and the Buzcode wiki: https://github.com/buzsakilab/buzcode/wiki/Data-Formatting-Standards#behavior
 
                 
+                
                 %% Add optional events field
                 if isfield(behavior, 'events')
                     
-                    trials            = behavior.events.trials;
-                    map               = behavior.events.map;
-                    tags              = types.core.VectorData('description','Trial Group where each trial belongs to','data',behavior.events.trialConditions);         
-                    start_time_trials = types.core.VectorData('description','Starting timepoint of Each Trial','data',behavior.events.trialIntervals(:,1));
-                    stop_time_trials  = types.core.VectorData('description','Ending timepoint of Each Trial','data',behavior.events.trialIntervals(:,2));
+                    trials                 = behavior.events.trials;
+                    map                    = behavior.events.map;
+                    all_start_times{iFile} = behavior.events.trialIntervals(:,1); %types.core.VectorData('description','Starting timepoint of Each Trial','data',behavior.events.trialIntervals(:,1));
+                    all_stop_times{iFile}  = behavior.events.trialIntervals(:,2); %types.core.VectorData('description','Ending timepoint of Each Trial','data',behavior.events.trialIntervals(:,2));
+                  
+                    all_trials = cell(length(trials),1);
+                    % Assign the trials to an intervals_trials field
+                    for iTrial = 1:length(trials)
+                        
+                        all_trial_fields = fieldnames(trials{iTrial});
+                        presentFields = all_trial_fields(ismember(all_trial_fields, {'x', 'y', 'z', 'errorPerMarker', 'mapping','orientation', 'timestamps', 'direction', 'type'})');
+                        
+                        data_trial = types.untyped.Set();
+
+                        for iField = 1:length(presentFields)
+                            
+                            % The orientation fields has subfields (other channels)
+                            if strcmp(presentFields{iField}, 'orientation')
+                                all_Orientation_fields = fieldnames(trials{iTrial}.(presentFields{iField}));
+                                
+                                data_orientation = types.untyped.Set();
+                                for iOrientationField = 1:length(all_Orientation_fields)
+                                    presentOrientationFields = all_Orientation_fields(ismember(all_Orientation_fields, {'x', 'y', 'z', 'w'})');
+
+                                    data_orientation_field = types.core.VectorData('description', [all_Orientation_fields{iOrientationField} ' field from the orientation field in a single trial'], 'data', trials{iTrial}.(presentFields{iField}).(presentOrientationFields{iOrientationField}));
+                                    data_orientation.set(presentOrientationFields{iOrientationField}, data_orientation_field);
+                                    
+                                end
+                                data_field = types.core.VectorData('description', [presentFields{iField} ' field from a single trial'], 'data', data_orientation);
+                                
+                            else
+                                data_field = types.core.VectorData('description', [presentFields{iField} ' field from a single trial'], 'data', trials{iTrial}.(presentFields{iField}));
+                            end
+                            
+                            data_trial.set(presentFields{iField}, data_field);
+                        end
+                        
+                        all_trials{iTrial} = data_trial;
+                    end
                     
-                    colnames          = behavior.events.conditionType;
+                    trials_vectordata = types.core.VectorData('description', ['Trials field from ' behavioral_Label '.behavior.mat file'], 'data', all_trials);
+                    map_vectordata    = types.core.VectorData('description', ['Map field from ' behavioral_Label '.behavior.mat file'], 'data', map');
                     
-                    id_trials         = types.core.ElementIdentifiers('data',1:length(trials));
-                              
-                    vectordata_trials = types.untyped.Set('trials', trials, 'map', map);
+                    % Combine both fields
+                    trials_map_field = types.untyped.Set('trials', trials_vectordata, 'map', map_vectordata);
                     
-                    intervals_trials = types.core.TimeIntervals('start_time',start_time_trials,'tags', tags, 'stop_time',stop_time_trials,...
-                                                                'colnames',colnames, 'description','experimental trials', ...
-                                                                'id',id_trials, 'vectordata',vectordata_trials);
-                    
-                    trialsNWB.set(behavioral_Label,intervals_trials);
+                    intervals_trials.vectordata.set(behavioral_Label,types.core.VectorData('description', ['Trials and map field from ' behavioral_Label '.behavior.mat file'], 'data', trials_map_field));
                 end
+                start_time_trials = types.core.VectorData('description','Starting timepoint of Each Trial for every behavioral condition','data',all_start_times);
+                stop_time_trials  = types.core.VectorData('description','Starting timepoint of Each Trial for every behavioral condition','data',all_stop_times);
+                    
             end
-
-            
-            
-            
+            intervals_trials.start_time  = start_time_trials;
+            intervals_trials.stop_time   = stop_time_trials;   
+            intervals_trials.colnames    = colnames;
+            intervals_trials.description = ['Trial info from ' num2str(length(behavioralFiles)) ' behavioral files'];
             
             nwb.intervals_trials = intervals_trials;
-            
-
-
-            intervals_trials = types.core.TimeIntervals('start_time',start_time_trials,'stop_time',stop_time_trials,...
-                                                       'colnames',{'start_time';'stop_time';'error_run';'stim_run';'both_visit';'condition'},...
-                                                       'description','experimental trials','id',id_trials, 'vectordata',vectordata_trials);
-
-            nwb.intervals_trials = intervals_trials;
-
-
 
         end
+        
         
         
         
@@ -763,7 +851,7 @@ classdef Neuroscope2NWB
             acquisition = types.untyped.Set;
             for iSpecialElectrode = 1:length(special_electrode_labels)
 
-                special_Electrode_data = bz_LoadBinary(lfpFile.name, 'duration',Inf, 'frequency',hdr.sRateLfp,'nchannels',hdr.nChannels, 'channels', special_electrode_indices(iSpecialElectrode));
+                special_Electrode_data = bz_LoadBinary(fullfile(lfpFile.folder,lfpFile.name), 'duration',Inf, 'frequency',hdr.sRateLfp,'nchannels',hdr.nChannels, 'channels', special_electrode_indices(iSpecialElectrode));
                 single_Electrode = types.core.TimeSeries('description','environmental electrode recorded inline with neural data','data',special_Electrode_data,'starting_time', 0, 'starting_time_rate', hdr.sRateLfp, 'data_unit','V');
                 acquisition.set(special_electrode_labels{iSpecialElectrode}, single_Electrode);
             end
