@@ -448,74 +448,122 @@ classdef Neuroscope2NWB
             
             behavioralFiles = dir([xml.folder_path filesep '*behavior.mat']);
 
-            if length(behavioralFiles) == 0
-                disp('There are no *behavior.mat files in this folder. No behavior will be added')
-                return
-            end
+            if length(behavioralFiles) ~= 0
+                
             
-            
-            
-            for iFile = 1:length(behavioralFiles)
+                for iFile = 1:length(behavioralFiles)
 
-                % The label of the behavior
-                behavioral_Label = erase(behavioralFiles(iFile).name,'.behavior.mat');
-                
-                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                behavioral_Label = strsplit(behavioral_Label,'.'); % '20170505_396um_0um_merge'    'track'
-                behavioral_Label = behavioral_Label{2};            % This section is hardcoded, maybe improve.
-                                                                   % I assumed here that the standardized way of saving behavior files is: experimentName.BehaviorLabel.behavior.mat
-                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                
-                % Load the file
-                behaviorstruct = load(behavioralFiles(iFile).name); % The example I have has the variable "behavior" saved
-                behavior       = behaviorstruct.behavior;
+                    % The label of the behavior
+                    behavioral_Label = erase(behavioralFiles(iFile).name,'.behavior.mat');
 
-                
-                %% This is based on the Buzcode tutorial Behavior file: 20170505_396um_0um_merge.track.behavior.mat
-                %  and the Buzcode wiki: https://github.com/buzsakilab/buzcode/wiki/Data-Formatting-Standards#behavior
-                behavioral_timestamps = behavior.timestamps;
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                    behavioral_Label = strsplit(behavioral_Label,'.'); % '20170505_396um_0um_merge'    'track'
+                    behavioral_Label = behavioral_Label{2};            % This section is hardcoded, maybe improve.
+                                                                       % I assumed here that the standardized way of saving behavior files is: experimentName.BehaviorLabel.behavior.mat
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-                
-                behavioral_signals_NWB = types.core.Position;
-                behavior_field_names = fieldnames(behaviorstruct.behavior)';
-                
-                %% First add the fields that contain channels
-                iChannelTypeFields = find(ismember(behavior_field_names,{'position','orientation','pupil'}));
-                
-                for iField = iChannelTypeFields
+                    % Load the file
+                    behaviorstruct = load(behavioralFiles(iFile).name); % The example I have has the variable "behavior" saved
+                    behavior       = behaviorstruct.behavior;
 
-                    channel_fields      = fieldnames(behavior.(behavior_field_names{iField}));
-                    behavioral_channels = zeros(length(behavior.(behavior_field_names{iField}).(channel_fields{1})),length(channel_fields));
-                    
-                    for iChannel = 1:length(channel_fields)
-                        behavioral_channels(:,iChannel) = behavior.(behavior_field_names{iField}).(channel_fields{iChannel});
+
+                    %% This is based on the Buzcode tutorial Behavior file: 20170505_396um_0um_merge.track.behavior.mat
+                    %  and the Buzcode wiki: https://github.com/buzsakilab/buzcode/wiki/Data-Formatting-Standards#behavior
+                    behavioral_timestamps = behavior.timestamps;
+
+
+                    behavioral_signals_NWB = types.core.Position;
+                    behavior_field_names = fieldnames(behaviorstruct.behavior)';
+
+                    %% First add the fields that contain channels
+                    iChannelTypeFields = find(ismember(behavior_field_names,{'position','orientation','pupil'}));
+
+                    for iField = iChannelTypeFields
+
+                        channel_fields      = fieldnames(behavior.(behavior_field_names{iField}));
+                        behavioral_channels = zeros(length(behavior.(behavior_field_names{iField}).(channel_fields{1})),length(channel_fields));
+
+                        for iChannel = 1:length(channel_fields)
+                            behavioral_channels(:,iChannel) = behavior.(behavior_field_names{iField}).(channel_fields{iChannel});
+                        end
+
+                        spatial_series = types.core.SpatialSeries('data', behavioral_channels, 'timestamps', behavioral_timestamps,'data_unit', behavior.units);
+                        behavioral_signals_NWB.spatialseries.set(behavior_field_names{iField}, spatial_series);
                     end
-                        
-                    spatial_series = types.core.SpatialSeries('data', behavioral_channels, 'timestamps', behavioral_timestamps,'data_unit', behavior.units);
-                    behavioral_signals_NWB.spatialseries.set(behavior_field_names{iField}, spatial_series);
+                    behavior_NWB.nwbdatainterface.set(behavioral_Label,behavioral_signals_NWB);
+
+
+                    %% Add behaviorinfo field - THIS SHOULDN'T BE SPATIALSERIES - HOWEVER IT FAILS
+                    behaviorinfoField = find(ismember(behavior_field_names,{'behaviorinfo'}));
+
+                    behaviorInfo_fields = fieldnames(behavior.(behavior_field_names{behaviorinfoField}));
+
+                    ErrorPerMarkerSignal = behavior.(behavior_field_names{behaviorinfoField}).errorPerMarker;
+
+                    spatial_series = types.core.SpatialSeries('data', ErrorPerMarkerSignal, 'timestamps', behavioral_timestamps,'data_unit', behavior.units, ...
+                                                              'comments', 'The data field represent the errorPerMarker vector', 'description', behavior.(behavior_field_names{behaviorinfoField}).description, 'control_description', behavior.(behavior_field_names{behaviorinfoField}).acquisitionsystem);
+                    behavioral_signals_NWB.spatialseries.set(behavior_field_names{behaviorinfoField}, spatial_series);
+                    behavior_NWB.nwbdatainterface.set(behavioral_Label,behavioral_signals_NWB);
+
+
                 end
-                behavior_NWB.nwbdatainterface.set(behavioral_Label,behavioral_signals_NWB);
+
+                behavior_NWB.description = 'Behavioral signals';
+                nwb.processing.set('behavior', behavior_NWB);
+
+                disp('Behavioral info added..')
+
+            
+            else % Check for YutaMouse behavioral files (*position*)
+            
+                behavioralFiles = dir('*position*');
+                
+                if ~isempty(behavioralFiles)
+                    
+                    behavior_NWB = types.core.ProcessingModule;
 
                 
-                %% Add behaviorinfo field - THIS SHOULDN'T BE SPATIALSERIES - HOWEVER IT FAILS
-                behaviorinfoField = find(ismember(behavior_field_names,{'behaviorinfo'}));
-                
-                behaviorInfo_fields = fieldnames(behavior.(behavior_field_names{behaviorinfoField}));
-                
-                ErrorPerMarkerSignal = behavior.(behavior_field_names{behaviorinfoField}).errorPerMarker;
-                
-                spatial_series = types.core.SpatialSeries('data', ErrorPerMarkerSignal, 'timestamps', behavioral_timestamps,'data_unit', behavior.units, ...
-                                                          'comments', 'The data field represent the errorPerMarker vector', 'description', behavior.(behavior_field_names{behaviorinfoField}).description, 'control_description', behavior.(behavior_field_names{behaviorinfoField}).acquisitionsystem);
-                behavioral_signals_NWB.spatialseries.set(behavior_field_names{behaviorinfoField}, spatial_series);
-                behavior_NWB.nwbdatainterface.set(behavioral_Label,behavioral_signals_NWB);
-                
-                
+                    time_epochs = repmat(struct('label','','start_times',0,'stop_times',0),length(behavioralFiles),1);
+
+                    for iFile = 1:length(behavioralFiles)
+
+                        % The label of the behavior
+                        behavioral_Label = strsplit(behavioralFiles(iFile).name,'__');
+                        behavioral_Label = erase(behavioral_Label{2},'.mat');
+
+                        position_signals = load(behavioralFiles(iFile).name);
+
+                        % Some behavioral signals might have more than one signal in them
+                        field_names = fieldnames(position_signals);
+
+                        the_position_field_NWB = types.core.Position;
+
+                        for iField = 1:length(field_names)
+
+                            behavioral_timestamps = position_signals.(field_names{iField})(:,1);
+                            position_coordinates  = position_signals.(field_names{iField})(:,2:end);
+                            spatial_series = types.core.SpatialSeries('data', position_coordinates, 'timestamps', behavioral_timestamps, 'reference_frame', 'unknown', 'data_conversion', 1);
+
+                            the_position_field_NWB.spatialseries.set(field_names{iField}, spatial_series);
+                        end
+
+                        behavior_NWB.nwbdatainterface.set(behavioral_Label,the_position_field_NWB);
+
+                        time_epochs(iFile).start_times = behavioral_timestamps(1,1);
+                        time_epochs(iFile).stop_times  = behavioral_timestamps(end,1);
+                        time_epochs(iFile).label       = behavioral_Label;
+                    end
+
+                    behavior_NWB.description = 'Behavioral signals';
+                    nwb.processing.set('behavior', behavior_NWB);
+            
+                    disp('Behavioral info added..')
+                    
+                else
+                    disp('No behavioral signals present in this directory')
+                    return
+                end
             end
-
-            behavior_NWB.description = 'Behavioral signals';
-            nwb.processing.set('behavior', behavior_NWB);
-
-            disp('Behavioral info added..')
         end
         
         
