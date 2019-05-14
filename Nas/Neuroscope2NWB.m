@@ -575,19 +575,22 @@ classdef Neuroscope2NWB
         function nwb = getElectrophysiology(xml,nwb)
             %% Adds electrophysiology signals in: nwb.processing.get('ecephys')
             
+            [ff basename] = fileparts(xml.folder_path);
+            
+            
             % bz_LoadBinary
-            lfpFile = dir([xml.folder_path filesep '*.eeg']);
+            lfpFile = dir([xml.folder_path filesep basename '*.lfp']);
 
             if length(lfpFile)>1
                 disp('More than one .eeg files are present here. No Electrophysiology signals were added')
                 return
             elseif length(lfpFile)==0
-                lfpFile = dir([xml.folder_path filesep '*.lfp']);
+                lfpFile = dir([xml.folder_path filesep basename '*.eeg']);
                  if length(lfpFile)>1
                     disp('More than one .lfp files are present here. No Electrophysiology signals were added')
                     return
-                 else
-                    disp('No .eeg files are present in the selected directory. No Electrophysiology signals were added')
+                 elseif length(lfpFile)==0
+                    disp('No .eeg or .lfp files are present in the selected directory. No Electrophysiology signals were added')
                     return
                  end
             end
