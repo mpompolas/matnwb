@@ -5,7 +5,7 @@
 %% Example conversion to NWB of the A1407_190416_113437 dataset
 
 % Folder that contains all the files - This is the only input needed
-folder_path = 'F:\Adrien_Intan_A1407_190416_113437';
+folder_path = 'F:\Adrien';
 
 %% Start Adding fields to NWB
 

@@ -105,7 +105,7 @@ classdef Neuroscope2NWB
             imp               = [];
             location          = [];
             shank             = [];
-            group_name        = [];
+            group_name        = cell(nShanks*length(groups{iGroup}.channels.channel), 1);
             group_object_view = [];
             filtering         = [];
             shank_channel     = [];
@@ -115,13 +115,14 @@ classdef Neuroscope2NWB
             nwb.general_devices.set(device_name, types.core.Device());
             device_link = types.untyped.SoftLink(['/general/devices/' device_name]);
 
+            ii = 1;
             for iGroup = 1:nShanks
                 for iChannel = 1:length(groups{iGroup}.channels.channel)
                     all_shank_channels{iGroup} = [all_shank_channels{iGroup} str2double(groups{iGroup}.channels.channel{iChannel}.Text)];
                     shank_channel     = [shank_channel; iChannel-1];
                     amp_channel_id    = [amp_channel_id; str2double(groups{iGroup}.channels.channel{iChannel}.Text)];
                     shank             = [shank; iGroup];
-                    group_name        = [group_name; ['shank' num2str(iGroup)]];
+                    group_name{ii}    = ['shank' num2str(iGroup)];
                     group_object_view = [group_object_view; types.untyped.ObjectView(['/general/extracellular_ephys/' ['shank' num2str(iGroup)]])];
 
                     if ~isfield(groups{iGroup}.channels.channel{iChannel},'position')
@@ -138,12 +139,15 @@ classdef Neuroscope2NWB
                     if ~isfield(groups{iGroup}.channels.channel{iChannel},'filtering')
                         filtering = [filtering; NaN];
                     end      
+                    ii = ii+1;
+
                 end
                 nwb.general_extracellular_ephys.set(['shank' num2str(iGroup)], ...
                     types.core.ElectrodeGroup( ...
                     'description', ['electrode group for shank' num2str(iGroup)], ...
                     'location', 'unknown', ...
                     'device', device_link));
+                
             end
 
             variables = {'x'; 'y'; 'z'; 'imp'; 'location'; 'filtering'; 'group'; 'group_name'; 'shank'; 'shank_channel'; 'amp_channel'};
@@ -155,7 +159,7 @@ classdef Neuroscope2NWB
                     tbl = table(x(iElectrode),y(iElectrode),z(iElectrode),imp(iElectrode),{location{iElectrode}},filtering(iElectrode),group_object_view(iElectrode),{group_name(iElectrode,:)},shank(iElectrode),shank_channel(iElectrode),amp_channel_id(iElectrode),...
                                'VariableNames', variables);
                 else
-                    tbl = [tbl; {x(iElectrode),y(iElectrode),z(iElectrode),imp(iElectrode),{location{iElectrode}},filtering(iElectrode),group_object_view(iElectrode),{group_name(iElectrode,:)},shank(iElectrode),shank_channel(iElectrode),amp_channel_id(iElectrode)}];
+                    tbl = [tbl; {x(iElectrode),y(iElectrode),z(iElectrode),imp(iElectrode),{location{iElectrode}},filtering(iElectrode),group_object_view(iElectrode),group_name(iElectrode,:),shank(iElectrode),shank_channel(iElectrode),amp_channel_id(iElectrode)}];
                 end
             end
 
@@ -508,7 +512,7 @@ classdef Neuroscope2NWB
 
                 end
 
-                behavior_NWB.description = 'Behavioral signals';
+                behavior_NWB.description = ['Behavioral signals from ' behavioral_Label 'behavior.mat file'];
                 nwb.processing.set('behavior', behavior_NWB);
 
                 disp('Behavioral info added..')
@@ -578,8 +582,14 @@ classdef Neuroscope2NWB
                 disp('More than one .eeg files are present here. No Electrophysiology signals were added')
                 return
             elseif length(lfpFile)==0
-                disp('No .eeg files are present in the selected directory. No Electrophysiology signals were added')
-                return
+                lfpFile = dir([xml.folder_path filesep '*.lfp']);
+                 if length(lfpFile)>1
+                    disp('More than one .lfp files are present here. No Electrophysiology signals were added')
+                    return
+                 else
+                    disp('No .eeg files are present in the selected directory. No Electrophysiology signals were added')
+                    return
+                 end
             end
 
 

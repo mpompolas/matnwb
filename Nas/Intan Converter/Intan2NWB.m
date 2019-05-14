@@ -203,7 +203,7 @@ methods(Static)
             
             
             
-            data = 1;
+            data = [zeros(32,100)];
             
             
             
@@ -213,9 +213,26 @@ methods(Static)
             
             
             % CHECK IF DATA CAN BE LOADED WITH SMALLER PRECISION HERE TO SAVE SPACE
-            data_object = types.core.ElectricalSeries('data', data, 'electrodes',electrodes_field, 'description', 'raw signal for all shank electrodes', 'starting_time', 0, 'starting_time_rate', rhd.frequency_parameters.amplifier_sample_rate);
+            lfp = types.core.ElectricalSeries('data', data, 'electrodes',electrodes_field, 'description', 'raw signal for all shank electrodes', 'starting_time', 0, 'starting_time_rate', rhd.frequency_parameters.amplifier_sample_rate);
 
-            nwb.acquisition.set('raw', data_object);
+            LFP = types.core.LFP;
+            LFP.electricalseries.set('lfp',lfp); 
+            
+            % Check if the ecephys field is already created           
+            if isempty(keys(nwb.processing))
+                ecephys = types.core.ProcessingModule('description', '');
+                ecephys.description = 'intermediate data from extracellular electrophysiology recordings, e.g., LFP';
+                nwb.processing.set('ecephys', ecephys);
+            else
+                if ~ismember(keys(nwb.processing),'ecephys')
+                    ecephys = types.core.ProcessingModule('description', '');
+                    ecephys.description = 'intermediate data from extracellular electrophysiology recordings, e.g., LFP';
+                    nwb.processing.set('ecephys', ecephys);
+                end
+            end
+            
+            nwb.processing.get('ecephys').nwbdatainterface.set('LFP', LFP);
+            disp('Electrophysiological signals added..')
             
             disp('Electrophysiology data added..')
 
