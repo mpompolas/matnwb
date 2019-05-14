@@ -96,8 +96,8 @@ classdef Neuroscope2NWB
 
             groups = xml.spikeDetection.channelGroups.group; % Use this for simplicity
 
-            all_shank_channels = cell(nShanks,1); % This will hold the channel numbers that belong in each shank
-
+            all_shank_channels = cell(nShanks,1); % This will hold the channel numbers that belong in each shank            
+            
             % Initialize variables
             x                 = [];
             y                 = [];
@@ -105,7 +105,7 @@ classdef Neuroscope2NWB
             imp               = [];
             location          = [];
             shank             = [];
-            group_name        = cell(nShanks*length(groups{iGroup}.channels.channel), 1);
+            group_name        = [];
             group_object_view = [];
             filtering         = [];
             shank_channel     = [];
@@ -115,14 +115,19 @@ classdef Neuroscope2NWB
             nwb.general_devices.set(device_name, types.core.Device());
             device_link = types.untyped.SoftLink(['/general/devices/' device_name]);
 
-            ii = 1;
             for iGroup = 1:nShanks
                 for iChannel = 1:length(groups{iGroup}.channels.channel)
                     all_shank_channels{iGroup} = [all_shank_channels{iGroup} str2double(groups{iGroup}.channels.channel{iChannel}.Text)];
                     shank_channel     = [shank_channel; iChannel-1];
                     amp_channel_id    = [amp_channel_id; str2double(groups{iGroup}.channels.channel{iChannel}.Text)];
                     shank             = [shank; iGroup];
-                    group_name{ii}    = ['shank' num2str(iGroup)];
+                    
+                    if nShanks > 9 && iGroup<10
+                        group_name = [group_name; 'shank' num2str(iGroup) ' '];
+                    else
+                        group_name = [group_name; 'shank' num2str(iGroup)];
+                    end
+
                     group_object_view = [group_object_view; types.untyped.ObjectView(['/general/extracellular_ephys/' ['shank' num2str(iGroup)]])];
 
                     if ~isfield(groups{iGroup}.channels.channel{iChannel},'position')
@@ -139,7 +144,6 @@ classdef Neuroscope2NWB
                     if ~isfield(groups{iGroup}.channels.channel{iChannel},'filtering')
                         filtering = [filtering; NaN];
                     end      
-                    ii = ii+1;
 
                 end
                 nwb.general_extracellular_ephys.set(['shank' num2str(iGroup)], ...
@@ -159,7 +163,7 @@ classdef Neuroscope2NWB
                     tbl = table(x(iElectrode),y(iElectrode),z(iElectrode),imp(iElectrode),{location{iElectrode}},filtering(iElectrode),group_object_view(iElectrode),{group_name(iElectrode,:)},shank(iElectrode),shank_channel(iElectrode),amp_channel_id(iElectrode),...
                                'VariableNames', variables);
                 else
-                    tbl = [tbl; {x(iElectrode),y(iElectrode),z(iElectrode),imp(iElectrode),{location{iElectrode}},filtering(iElectrode),group_object_view(iElectrode),group_name(iElectrode,:),shank(iElectrode),shank_channel(iElectrode),amp_channel_id(iElectrode)}];
+                    tbl = [tbl; {x(iElectrode),y(iElectrode),z(iElectrode),imp(iElectrode),{location{iElectrode}},filtering(iElectrode),group_object_view(iElectrode),{group_name(iElectrode,:)},shank(iElectrode),shank_channel(iElectrode),amp_channel_id(iElectrode)}];
                 end
             end
 
