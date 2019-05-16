@@ -3,6 +3,9 @@ classdef Intan2NWB
 % This function wraps all electrophysiological, behavioral and analyzed
 % data into a single NWB file.
 
+%% This uses an .rhd importer downloaded from:
+% http://intantech.com/files/RHD2000_MATLAB_functions_v2_01.zip
+
 % It was tested on the A1407_190416_113437 dataset:
 
 % Only the folder needs to be specified. It assumes that all Intan,
@@ -22,16 +25,17 @@ methods(Static)
        
         function rhd = GetRHDInfo(folder_path)
             
-            %% This uses an .rhd importer downloaded from:
-            % http://intantech.com/files/RHD2000_MATLAB_functions_v2_01.zip
-
             all_files_in_folder = dir(folder_path);
 
             iRHD = [];
+            iAMP = [];
             for iFile = 1:length(all_files_in_folder)
                 if strfind(all_files_in_folder(iFile).name,'.rhd')
                     iRHD = [iRHD iFile];
                 end
+                if strcmp(all_files_in_folder(iFile).name,'amplifier.dat')
+                    iAMP = [iAMP iFile];
+                end                
             end
             if isempty(iRHD)
                 error 'There are no .rhd files in this folder'
@@ -40,9 +44,20 @@ methods(Static)
             end
 
             rhd = read_Intan_RHD2000_file([folder_path filesep all_files_in_folder(iRHD).name]);
-            
             rhd.folder_path = folder_path;
             
+                   
+            % Check which of the 3 types this dataset belongs to:
+            % Get base dataset folder
+            [temp, isItInfo] = fileparts([folder_path filesep all_files_in_folder(iRHD).name]);
+
+            if strcmp(isItInfo,'info') && isempty(iAMP)
+                rhd.AcqType = 2; % One separate file per channel
+            elseif strcmp(isItInfo,'info') && ~isempty(iAMP)
+                rhd.AcqType = 3; % One separate file per channel TYPE
+            else
+                rhd.AcqType = 1; % Single file for everything
+            end
         end
         
         
@@ -80,6 +95,7 @@ methods(Static)
             nwb.general_subject = types.core.Subject( ...
                 'description', 'mouse 5', 'genotype', 'Control', 'age', '9 months', ...
                 'sex', 'M', 'subject_id', 'PoorMouse', 'species', 'Mus musculus');
+                        
         end
         
         
@@ -173,13 +189,13 @@ methods(Static)
             nChannels = rhd.num_amplifier_channels;
             nSamples  = Inf;
 
-% % % % % % %             % Get data
-% % % % % % %             fid = fopen(fullfile(rhd.folder_path, 'amplifier.dat'), 'r');
-% % % % % % %             
-% % % % % % %             % CHECK IF DATA CAN BE LOADED WITH SMALLER PRECISION HERE TO SAVE SPACE
-% % % % % % %             data = fread(fid, [nChannels, nSamples], 'int16');
-% % % % % % %             data = data * 0.195; % Convert to microvolts
-% % % % % % %             fclose(fid);
+            % Get data
+            fid = fopen(fullfile(rhd.folder_path, 'amplifier.dat'), 'r');
+            
+            % CHECK IF DATA CAN BE LOADED WITH SMALLER PRECISION HERE TO SAVE SPACE
+            data = fread(fid, [nChannels, nSamples], 'int16');
+            data = data * 0.195; % Convert to microvolts
+            fclose(fid);
             
             % Get timestamps
             fid = fopen(fullfile(rhd.folder_path, 'time.dat'), 'r');
@@ -194,24 +210,6 @@ methods(Static)
             
             electrodes_field = types.core.DynamicTableRegion('table',types.untyped.ObjectView('/general/extracellular_ephys/electrodes'),'description','electrode table reference','data',nwb.general_extracellular_ephys_electrodes.id.data);
 
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            data = [zeros(32,100)];
-            
-            
-            
-            
-            
-            
-            
-            
             % CHECK IF DATA CAN BE LOADED WITH SMALLER PRECISION HERE TO SAVE SPACE
             lfp = types.core.ElectricalSeries('data', data, 'electrodes',electrodes_field, 'description', 'raw signal for all shank electrodes', 'starting_time', 0, 'starting_time_rate', rhd.frequency_parameters.amplifier_sample_rate);
 
@@ -274,6 +272,75 @@ methods(Static)
             disp('AnalogIn data added..')
 
         end
+      
+        
+        function nwb = getEvents(rhd,nwb)
+            
+            areThereEvents = 0;
+            
+            
+            
+            AcqType = 1;
+
+            
+            
+            if AcqType==2
+                if ~isempty(EventFiles)
+                    % Read blocks of BINARY INPUT channels to create events
+                    parallel_input = false(num_samples_time, length(EventFiles));
+
+                    for iDIN = 1:length(EventFiles)
+                        fid = fopen(fullfile(base_,dirComment,EventFiles(iDIN).name), 'r');        
+                        temp = fread(fid, num_samples_time, 'uint16');
+                        parallel_input(:,iDIN) = logical(temp);
+                        fclose(fid);
+                    end
+                    events_vector = bst_bi2de(parallel_input,'right-msb'); % Collapse the parallel ports to a vector that shows the events
+                    areThereEvents = 1;
+                end
+            else
+                if ~isempty(rhd.board_dig_in_channels)
+                    events_vector = bi2de(rhd.board_dig_in_channels,'right-msb'); % Collapse the parallel ports to a vector that shows the events
+                    areThereEvents = 1;
+                end
+            end
+            
+            
+            if areThereEvents
+                
+                [event_samples, event_labels] = peakseek(events_vector, min(events_vector));
+                event_labels = event_labels';
+                event_samples = event_samples';
+                
+                % Create events list
+                if ~isempty(event_labels)
+
+                    % Get list of events
+                    event_labels_unique = unique(event_labels); % These are still numbers
+
+                    % Initialize list of events                    
+                    events = struct('label',[],'times',[]);
+
+                    % Format list
+                    for iEvt = 1:length(event_labels_unique)
+                        % Fill the event fields
+                        events(iEvt).label = num2str(event_labels_unique(iEvt));
+                        events(iEvt).times = event_samples(event_labels == event_labels_unique(iEvt))' ./ rhd.frequency_parameters.board_dig_in_sample_rate;
+                    end
+                    
+                    %% Import the events to NWB
+                    for iEvt = 1:length(events)
+                        AnnotationSeries = types.core.AnnotationSeries('data',repmat({events(iEvt).label},length(events(iEvt).times)),'timestamps',events(iEvt).times);
+                        nwb.stimulus_presentation.set(events(iEvt).label, AnnotationSeries);
+                    end
+                    disp('Events added..')                    
+                    
+                end
+                
+            end
+            
+        end
+        
         
         
 end

@@ -7,6 +7,11 @@
 % Folder that contains all the files - This is the only input needed
 folder_path = 'F:\Adrien';
 
+
+folder_path = 'F:\Intan Files\Separate File per Electrode'
+
+folder_path = 'F:\Intan Files\Single File'
+
 %% Start Adding fields to NWB
 
 % Get info from the rhd file
@@ -27,6 +32,8 @@ nwb = Intan2NWB.getAuxiliary(rhd,nwb);
 % Add analogIn channel
 nwb = Intan2NWB.getAnalogIn(rhd,nwb);
 
+% Add analogIn channel
+nwb = Intan2NWB.getEvents(rhd,nwb);
 
 %% Export to nwb
 nwbExport(nwb, 'PoorMouse_converted.nwb')
