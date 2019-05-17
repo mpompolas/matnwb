@@ -3,20 +3,13 @@ classdef Intan2NWB
 % This function wraps all electrophysiological, behavioral and analyzed
 % data into a single NWB file.
 
-%% This uses an .rhd importer downloaded from:
-% http://intantech.com/files/RHD2000_MATLAB_functions_v2_01.zip
-
-% It was tested on the A1407_190416_113437 dataset:
-
 % Only the folder needs to be specified. It assumes that all Intan,
 % .dat and .rhd files exist within the specified folder.
 
 % Intan has 3 ways of saving acquisition files:
-% 1. One file that saves everything .rhd
+% 1. One file that saves everything into an .rhd
 % 2. One separate file per channel
 % 3. One file for each channel TYPE
-
-% The following is tested on type (3).
 
 % Konstantinos Nasiotis 2019
 
@@ -45,6 +38,7 @@ methods(Static)
 
             rhd = read_Intan_RHD2000_file([folder_path filesep all_files_in_folder(iRHD).name]);
             rhd.folder_path = folder_path;
+            rhd.name        = all_files_in_folder(iRHD).name;
             
                    
             % Check which of the 3 types this dataset belongs to:
@@ -189,18 +183,35 @@ methods(Static)
             nChannels = rhd.num_amplifier_channels;
             nSamples  = Inf;
 
-            % Get data
-            fid = fopen(fullfile(rhd.folder_path, 'amplifier.dat'), 'r');
             
-            % CHECK IF DATA CAN BE LOADED WITH SMALLER PRECISION HERE TO SAVE SPACE
-            data = fread(fid, [nChannels, nSamples], 'int16');
-            data = data * 0.195; % Convert to microvolts
-            fclose(fid);
+            if rhd.AcqType == 1
+            	rhd = read_Intan_RHD2000_file(fullfile(rhd.folder_path, rhd.name),1,1);
+                
+                
+                data = zeros(rhd.num_amplifier_channels, )
+                for iChannel = 1:rhd.num_amplifier_channels
+                    
+                    
+                    
+                    
+                end
+                
+            elseif rhd.AcqType == 2
+                
+                
+            elseif rhd.AcqType == 3
+                % Get data
+                fid = fopen(fullfile(rhd.folder_path, 'amplifier.dat'), 'r');
+                data = fread(fid, [nChannels, nSamples], 'int16');
+                data = data * 0.195; % Convert to microvolts
+                fclose(fid);
+            end
             
-            % Get timestamps
-            fid = fopen(fullfile(rhd.folder_path, 'time.dat'), 'r');
-            time = fread(fid, 'int32');
-            fclose(fid);
+            
+%             % Get timestamps
+%             fid = fopen(fullfile(rhd.folder_path, 'time.dat'), 'r');
+%             time = fread(fid, 'int32');
+%             fclose(fid);
             
             % If the electrode Information has not already been filled, 
             % do it now
