@@ -1,13 +1,6 @@
 function nwb = addUnitsInfo(xml,nwb)
     %% Add the units info from the standard Buzcode format: *.spikes.cellinfo.mat
 
-    
-    
-    xml.folder_path = 'C:\Users\McGill\Documents\GitHub\buzcode\tutorials\exampleDataStructs\20170505_396um_0um_merge';
-    
-    
-    
-    
     cellinfoFiles = dir([xml.folder_path filesep '*spikes.cellinfo.mat']);
     
     if length(cellinfoFiles)>1
@@ -44,7 +37,7 @@ function nwb = addUnitsInfo(xml,nwb)
     % Initialize the fields needed
     spike_times       = types.core.VectorData        ('data', spike_times, 'description', 'the spike times for each unit');
     spike_times_index = types.core.VectorIndex       ('data', spike_times_index, 'target', types.untyped.ObjectView('/units/spike_times')); % The ObjectView links the indices to the spike times
-    id                = types.core.ElementIdentifiers('data', [0:length(spikes.UID)-1]');
+    id                = types.core.ElementIdentifiers('data', spikes.UID');
 
     
     waveform_mean = zeros(length(spikes.UID),length(spikes.rawWaveform{1}));

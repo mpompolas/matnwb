@@ -1,26 +1,14 @@
 function nwb = addTrials(xml,nwb)
             
-    %% THIS SECTION LOADS THE TRIAL INFO FROM THE .BEHAVIOR.MAT FILES
-    % Each file is stored in: nwb.processing.get('behavior').nwbdatainterface.get('trials_BEHAVIORNAME'))
-    %% This is based on the Buzcode tutorial Behavior file: 20170505_396um_0um_merge.track.behavior.mat
-    %  and the Buzcode wiki: https://github.com/buzsakilab/buzcode/wiki/Data-Formatting-Standards#behavior
+    %% THIS SECTION ADDS THE TRIAL INFO FROM THE .BEHAVIOR.MAT FILES TO THE NWB FILE - COMBINE IT WITH addBehavior in order to use bz_LoadBehavior
+    % The trials part of Each file is stored in: nwb.processing.get('behavior').nwbdatainterface.get('trials_BEHAVIORNAME'))
+    % This is based on the Buzcode tutorial Behavior file: 20170505_396um_0um_merge.track.behavior.mat
+    % and the Buzcode wiki: https://github.com/buzsakilab/buzcode/wiki/Data-Formatting-Standards#behavior
 
+    % Konstantinos Nasiotis 2019
 
-
-
-
-
-
-%     Just for the test, delete after
-    xml.folder_path = 'C:\Users\McGill\Documents\GitHub\buzcode\tutorials\exampleDataStructs\20170505_396um_0um_merge';
-
-
-
-
-
-
-
-
+    
+    %% Fill the fields
     behavioralFiles = dir([xml.folder_path filesep '*behavior.mat']);
 
     if ~isempty(behavioralFiles)
@@ -129,6 +117,8 @@ function nwb = addTrials(xml,nwb)
                 intervals_trials.vectordata.set('trials', types.core.VectorData('description', ['all trials" data from ' behavioral_Label '.behavior.mat file - Shorter trials were concatenated with NaNs - nSamples x nTrials x nChannels'], 'data', oneMatrixToRuleThemAll));
                 intervals_trials.vectordata.set('map', types.core.VectorData('description', ['map info from all condition for ' behavioral_Label '.behavior.mat file - nSamples x nConditions x nChannels'], 'data', map_matrix));
                 intervals_trials.vectordata.set('conditionType', types.core.VectorData('description', ['conditionType for map field in ' behavioral_Label], 'data', conditionType));
+                intervals_trials.vectordata.set('direction', types.core.VectorData('description', ['direction for trials in ' behavioral_Label], 'data', direction));
+                intervals_trials.vectordata.set('type', types.core.VectorData('description', ['Type of trials in ' behavioral_Label], 'data', type));
 
                 intervals_trials.colnames = labels;
                 intervals_trials.id       = types.core.ElementIdentifiers('data', 1:nTrials);

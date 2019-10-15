@@ -15,8 +15,14 @@ nwb = GeneralInfo(xml);
 % Add electrode information
 nwb = addElectrodeInfo(xml, nwb);
 
-% Add events
-nwb = addEvents(xml, nwb);
+% Add Behavior information
+nwb = addBehavior(xml, nwb);
+
+% Add Behavior information
+nwb = addTrials(xml, nwb);
+
+% % % % % Add events
+% % % % nwb = addEvents(xml, nwb);
 
 % Add electrophysiological data (.lfp, .eeg)
 nwb = addElectrophysiology(xml, nwb);
@@ -25,4 +31,12 @@ nwb = addElectrophysiology(xml, nwb);
 nwb = addUnitsInfo(xml, nwb);
 
 %% Export to nwb
-nwbExport(nwb, 'test_Buzcode_Standards.nwb')
+nwbExport(nwb, 'F:\NWBtoBuzcode\test_Buzcode_Standards2.nwb')
+
+
+
+
+
+
+
+

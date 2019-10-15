@@ -9,8 +9,10 @@ function nwb = addEvents(xml,nwb)
     % positive (start) or negative (stop) value
     
     eventFiles = dir([xml.folder_path filesep '*.events.mat']);
-
+    
     if ~isempty(eventFiles)
+        all_events = types.core.ProcessingModule();
+
         for iFile = 1:length(eventFiles)
             events = load(fullfile(eventFiles(iFile).folder,eventFiles(iFile).name));
             
@@ -21,37 +23,59 @@ function nwb = addEvents(xml,nwb)
        
             if size(timestamps,2) == 2 % Start-stop stimulation - The events need to be saved as IntervalSeries
                 IntervalSeries = types.core.IntervalSeries();
-                IntervalSeries.timestamps = [timestamps(:,1) ; timestamps(:,2)]; % First event start then event stop
-                IntervalSeries.data = [ones(size(timestamps,1),1) ; ones(size(timestamps,1),1)* (-1)]; % First event start then event stop - 1 signifies events start, -1 event stop
-                nwb.stimulus_presentation.set(name, IntervalSeries);
+                IntervalSeries.timestamps = [timestamps(:,1) ; timestamps(:,2)]; % I linearize the start and stop timestamps: First event start then event stop
+                IntervalSeries.data = [ones(size(timestamps,1),1) ; ones(size(timestamps,1),1)* (-1)]; % First event start then event stop: 1 signifies events start, -1 event stop
+                
+                all_events.nwbdatainterface.set(name,IntervalSeries);
+                
+                
             else % Stimulation Onset only - The events need to be saved as AnnotationSeries
-                AnnotationSeries = types.core.AnnotationSeries('data', repmat({name},length(timestamps),1),'timestamps',timestamps);
-                nwb.stimulus_presentation.set(name, AnnotationSeries);
+                AnnotationSeries = types.core.AnnotationSeries('data', repmat({name},length(timestamps),1),'timestamps',timestamps);                
+                all_events.nwbdatainterface.set(name,AnnotationSeries);
+   
             end
             
-            % Add the detectorinfo information
-            
-            detectorinfo = types.untyped.Set();
             
             
             
-            FINISH THE DETECOTRING
+            
+            THIS STILL GIVES AN ERROR WHEN EXPORTING
             
             
+            
+            
+            
+            
+            %% Add the detectorinfo information
+            
+            % This is no properly set. It simply saves the extra info from
+            % the behavior.mat file within the nwb file.
+            % Lab members should help in which information should be saved.
+            
+            detectorinfo = types.core.DynamicTable;
             
             detector_fields = fields(events.(name).detectorinfo);
             for iField = 1:length(detector_fields)
-                if strcmp(detector_fields{iField},'detectionintervals')
-                    IntervalSeries = types.core.IntervalSeries();
-                    IntervalSeries.timestamps = [events.(name).detectorinfo.(detector_fields{iField})(:,1) ; events.(name).detectorinfo.(detector_fields{iField})(:,2)]; % First event start then event stop
-                    IntervalSeries.data = [ones(size(events.(name).detectorinfo.(detector_fields{iField}),1),1) ; ones(size(events.(name).detectorinfo.(detector_fields{iField}),1),1)* (-1)]; % First event start then event stop - 1 signifies events start, -1 event stop
-                    detectorinfo.set(detector_fields{iField}, IntervalSeries);
-                else
-                	detectorinfo.set(detector_fields{iField}, events.(name).detectorinfo.(detector_fields{iField}));
-                end
+                   
+                    detectorinfo.vectordata.set(detector_fields{iField}, types.core.VectorData('description','Name of the buzcode function that created the events', 'data', events.(name).detectorinfo.(detector_fields{iField})));
+%                     
+%                     IntervalSeries.timestamps = [events.(name).detectorinfo.(detector_fields{iField})(:,1) ; events.(name).detectorinfo.(detector_fields{iField})(:,2)]; % First event start then event stop
+%                     IntervalSeries.data = [ones(size(events.(name).detectorinfo.(detector_fields{iField}),1),1) ; ones(size(events.(name).detectorinfo.(detector_fields{iField}),1),1)* (-1)]; % First event start then event stop - 1 signifies events start, -1 event stop
+%                     detectorinfo.set(detector_fields{iField}, IntervalSeries);
+%                 else
+%                 	detectorinfo.set(detector_fields{iField}, events.(name).detectorinfo.(detector_fields{iField}));
+%                 end
             end
+            detectorinfo.colnames = detector_fields;
+            detectorinfo.description = ['Structure fields from ' name ' .behavior.mat file'];
+            detectorinfo.id = types.core.ElementIdentifiers('data', 1);
             
-            nwb.stimulus_presentation.set([name '_detectorinfo'], detectorinfo)
+            all_events.nwbdatainterface.set([name '_detectorinfo'],detectorinfo);
+            
+
+            all_events.description = 'Events created from analysis functions';
+            nwb.processing.set('events', all_events);
+            
             
         end
         disp('Events added..')

@@ -3,7 +3,7 @@ function nwb = addBehavior_Yuta(xml,nwb)
     %% Add behavioral data: nwb2.processing.get('behavior').nwbdatainterface
     % Check for YutaMouse behavioral files (*position*)
 
-    behavioralFiles = dir('*position*');
+    behavioralFiles = dir(fullfile(xml.folder_path, '*position*'));
 
     if ~isempty(behavioralFiles)
 
@@ -18,7 +18,7 @@ function nwb = addBehavior_Yuta(xml,nwb)
             behavioral_Label = strsplit(behavioralFiles(iFile).name,'__');
             behavioral_Label = erase(behavioral_Label{2},'.mat');
 
-            position_signals = load(behavioralFiles(iFile).name);
+            position_signals = load(fullfile(behavioralFiles(iFile).folder, behavioralFiles(iFile).name));
 
             % Some behavioral signals might have more than one signal in them
             field_names = fieldnames(position_signals);

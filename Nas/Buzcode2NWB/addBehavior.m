@@ -1,5 +1,5 @@
 function nwb = addBehavior(xml,nwb)
-    %% This function adds Behavior information on an nwb file
+    %% This function adds Behavior information on an nwb file - COMBINE IT WITH addTrials in order to use bz_LoadBehavior
     %  It is based on the Buzcode tutorial Behavior file: 20170505_396um_0um_merge.track.behavior.mat
     %  and the Buzcode wiki: https://github.com/buzsakilab/buzcode/wiki/Data-Formatting-Standards#behavior
 
@@ -8,24 +8,6 @@ function nwb = addBehavior(xml,nwb)
     %% Add behavioral data: nwb2.processing.get('behavior').nwbdatainterface
     behavior_NWB = types.core.ProcessingModule;
 
-    
-    
-    
-    
-    
-    
-    % Just for the test, delete after
-    xml.folder_path = 'C:\Users\McGill\Documents\GitHub\buzcode\tutorials\exampleDataStructs\20170505_396um_0um_merge'
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
     behavioralFiles = dir([xml.folder_path filesep '*behavior.mat']);
 
     if length(behavioralFiles) ~= 0
@@ -82,7 +64,6 @@ function nwb = addBehavior(xml,nwb)
                                                       'comments', 'The data field represent the errorPerMarker vector', 'description', behavior.(behavior_field_names{behaviorinfoField}).description, 'control_description', behavior.(behavior_field_names{behaviorinfoField}).acquisitionsystem);
             behavioral_signals_NWB.spatialseries.set(behavior_field_names{behaviorinfoField}, spatial_series);
             behavior_NWB.nwbdatainterface.set(behavioral_Label,behavioral_signals_NWB);
-
 
         end
 
