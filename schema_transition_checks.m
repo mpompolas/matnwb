@@ -87,6 +87,10 @@ for iFile = 1:length(outFileNames)
     % Index of cached schema that correspond to the fileVersion
     iSchema = find(ismember(schemaNames, fileSchemaVersion));
     
+    if isempty(iSchema)
+        error('This version is not supported by Brainstorm')
+    end
+    
     % Entering and adding schema folders to the path
     cd(finalSchemaFolder{iSchema})
     addpath(genpath(finalSchemaFolder{iSchema}))
