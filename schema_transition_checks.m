@@ -20,79 +20,81 @@ for i = 1:length(fileURLs)
 end
     
 
-%% MatNWB - download and extract versions of MatNWB
+%% Download matNWB 2.2.5.0
 path_to_download_MatNWB = 'C:\Users\knasi\Desktop\nwb\MatNWB';
 
+matNWBURLs = {'https://github.com/NeurodataWithoutBorders/matnwb/archive/v2.2.5.0.zip'};
+MatNWBNames = {'2.2.5.0'};   
 
-
-matNWBURLs = {'https://github.com/NeurodataWithoutBorders/matnwb/archive/v2.2.5.1.zip';
-              'https://github.com/NeurodataWithoutBorders/matnwb/archive/v2.2.5.0.zip';
-              'https://github.com/NeurodataWithoutBorders/matnwb/archive/v2.2.4.0.zip';
-              'https://github.com/NeurodataWithoutBorders/matnwb/archive/0.2.3.zip';
-              'https://github.com/NeurodataWithoutBorders/matnwb/archive/v0.2.2.zip'};
-
-MatNWBNames = {'2.2.5.1';
-               '2.2.5.0';
-               '2.2.4.0';
-               '0.2.3'; % 2.2.2
-               '0.2.2'}; % 2.2.1
-
-%Download
 mkdir(path_to_download_MatNWB)
 for i= 1:length(matNWBURLs)
     cd(path_to_download_MatNWB)
     fullMatNWBPath = fullfile(path_to_download_MatNWB,MatNWBNames{i});
     outFileNameMatNWB{i} = websave(fullMatNWBPath, matNWBURLs{i});
-    
     % Unzip downloaded MatNWB
     unzip(outFileNameMatNWB{i})
     % Final folder that has all the matNWB files
     finalMatNWBFolder{i} = fullfile(path_to_download_MatNWB, ['matnwb-' MatNWBNames{i}]);
 end
 
+%% Schema versions
+
+path_to_download_schemas = 'C:\Users\knasi\Desktop\nwb\schemas';
 
 
+
+schemaURLs = {'https://github.com/NeurodataWithoutBorders/nwb-schema/archive/2.2.5.zip';
+              'https://github.com/NeurodataWithoutBorders/nwb-schema/archive/2.2.4.zip';
+              'https://github.com/NeurodataWithoutBorders/nwb-schema/archive/2.2.3.zip';
+              'https://github.com/NeurodataWithoutBorders/nwb-schema/archive/2.2.2.zip';
+              'https://github.com/NeurodataWithoutBorders/nwb-schema/archive/2.2.1.zip';
+              'https://github.com/NeurodataWithoutBorders/nwb-schema/archive/2.2.0.zip';
+              'https://github.com/NeurodataWithoutBorders/nwb-schema/archive/2.1.0.zip'};
+
+schemaNames = {'2.2.5';
+               '2.2.4';
+               '2.2.3';
+               '2.2.2';
+               '2.2.1';
+               '2.2.0';
+               '2.1.0'};
+
+%Download
+mkdir(path_to_download_schemas)
+for i= 1:length(schemaURLs)
+    cd(path_to_download_schemas)
+    fullschemaPath = fullfile(path_to_download_schemas,schemaNames{i});
+    outFileNameSchema{i} = websave(fullschemaPath, schemaURLs{i});
+    
+    % Unzip downloaded MatNWB
+    unzip(outFileNameSchema{i})
+    % Final folder that has all the matNWB files
+    finalSchemaFolder{i} = fullfile(path_to_download_schemas, ['nwb-schema-' schemaNames{i}]);
+end
 
 
 %% Check the version of the NWB file and load the appropriate matnwb
+matNWBpath = finalMatNWBFolder{1}; % MatNWB 2.2.5.0
+cd(matNWBpath)
+generateCore()
+addpath(matNWBpath)
+
+
 for iFile = 1:length(outFileNames)
     
-    % GenerateCore within 2.2.5.0 so you have access to util.getSchemaVersion
-    cd(finalMatNWBFolder{2})
-    generateCore() % This fails here for 2.2.5.1 - HOW GO AROUND THIS?
-	fileSchemaVersion = util.getSchemaVersion(outFileNames{iFile});
-    rmpath(genpath(finalMatNWBFolder{2})); % Remove from path what was used to get the util.getSchemaVersion
-    
-    % Add what is needed for changing version here and then call nwbRead
-    if strcmp(fileSchemaVersion, '2.2.1')
-        associated_folder_string = '0.2.2';
-    elseif strcmp(fileSchemaVersion, '2.2.2')
-        associated_folder_string = '0.2.3';
-    elseif strcmp(fileSchemaVersion, '2.2.4')
-        associated_folder_string = '2.2.4.0';
-    elseif strcmp(fileSchemaVersion, '2.2.5')
-        associated_folder_string = '2.2.5.0';
-    else
-        error('version is not supported by Brainstorm')
-    end
+	fileSchemaVersion = util.getSchemaVersion(outFileNames{iFile});    
     
     % Index of cached schema that correspond to the fileVersion
-    iSchema = find(ismember(MatNWBNames, associated_folder_string));
-    % Enter the folder that corresponds to that version
-    cd(finalMatNWBFolder{iSchema})
-    generateCore()
+    iSchema = find(ismember(schemaNames, fileSchemaVersion));
+    
+    % Entering and adding schema folders to the path
+    cd(finalSchemaFolder{iSchema})
+    addpath(genpath(finalSchemaFolder{iSchema}))
 
-    
-    %%%%%%%%%%%% ADD HERE %%%%%%%%%%%%%%
-   
-    
-    
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
+    % Read and then remove the schema version from the path
     nwb2 = nwbRead(outFileNames{iFile});
     disp('Success')
-%     rmpath(genpath(finalMatNWBFolder{iSchema})); % Remove from path what was used to load the file
+    rmpath(genpath(finalSchemaFolder{iSchema})); % Remove from path what was used to load the file
 
 end
 
